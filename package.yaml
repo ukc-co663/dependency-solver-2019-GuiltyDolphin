@@ -47,3 +47,4 @@ tests:
     dependencies:
     - depsolver
     - hspec
+    - QuickCheck
