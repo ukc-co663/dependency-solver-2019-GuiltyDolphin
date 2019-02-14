@@ -11,6 +11,12 @@ module Data.Depsolver.Repository
     , mkPackage
     , packageName
     , packageVersion
+    , packageDependencies
+
+    -- ** Dependencies
+    , VersionMatch
+    , VersionCmp(..)
+    , mkDependency
 
     -- ** Versions
     , Version
@@ -62,11 +68,25 @@ data PackageDesc = PackageDesc {
       packageName :: String
       -- ^ Version of the package.
     , packageVersion :: Version
+      -- ^ Dependencies of the package
+      -- ^ (as a conjunction of disjunctions).
+    , packageDependencies :: [[VersionMatch]]
     } deriving (Eq, Show)
 
 
-mkPackage :: String -> Version -> PackageDesc
-mkPackage name version =
+mkPackage :: String -> Version -> [[VersionMatch]] -> PackageDesc
+mkPackage name version deps =
     PackageDesc { packageName = name
                 , packageVersion = version
+                , packageDependencies = deps
                 }
+
+
+data VersionCmp = VLTE | VLT | VEQ | VGT | VGTE
+                  deriving (Eq, Show)
+
+data VersionMatch = VersionMatch String VersionCmp Version
+                    deriving (Eq, Show)
+
+mkDependency :: String -> VersionCmp -> Version -> VersionMatch
+mkDependency = VersionMatch
