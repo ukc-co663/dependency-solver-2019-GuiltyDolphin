@@ -12,6 +12,7 @@ module Data.Depsolver.Repository
     , packageName
     , packageVersion
     , packageDependencies
+    , packageConflicts
 
     -- ** Dependencies
     , VersionMatch
@@ -71,14 +72,17 @@ data PackageDesc = PackageDesc {
       -- ^ Dependencies of the package
       -- ^ (as a conjunction of disjunctions).
     , packageDependencies :: [[VersionMatch]]
+      -- ^ Packages that conflict with the package.
+    , packageConflicts :: [VersionMatch]
     } deriving (Eq, Show)
 
 
-mkPackage :: String -> Version -> [[VersionMatch]] -> PackageDesc
-mkPackage name version deps =
+mkPackage :: String -> Version -> [[VersionMatch]] -> [VersionMatch] -> PackageDesc
+mkPackage name version deps conflicts =
     PackageDesc { packageName = name
                 , packageVersion = version
                 , packageDependencies = deps
+                , packageConflicts = conflicts
                 }
 
 

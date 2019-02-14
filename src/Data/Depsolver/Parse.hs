@@ -27,7 +27,9 @@ parseRepo rs = do
               version <- lookup "version" packageMap >>= wantString >>= parseVersion
               let optDeps = lookup "depends" packageMap
               deps <- maybe (pure []) parseDeps optDeps
-              pure $ mkPackage name version deps
+              let optConflicts = lookup "conflicts" packageMap
+              conflicts <- maybe (pure []) parseConflicts optConflicts
+              pure $ mkPackage name version deps conflicts
           parsePackage _ = Nothing
           resToMaybe =
               either (const Nothing) Just . TJ.resultToEither
@@ -36,10 +38,10 @@ parseRepo rs = do
           wantStrings (TJ.JSArray a) = mapM wantString a
           wantStrings _ = Nothing
           parseName = wantString
-          parseDeps (TJ.JSArray deps) = do
-                 depStrs <- mapM ((>>= mapM parseDependency) . wantStrings) deps
-                 pure depStrs
+          parseDeps (TJ.JSArray deps) =
+              mapM ((>>= mapM parseDependency) . wantStrings) deps
           parseDeps _ = Nothing
+          parseConflicts = (>>= mapM parseDependency) . wantStrings
 
 
 -- | Parse a package version.
