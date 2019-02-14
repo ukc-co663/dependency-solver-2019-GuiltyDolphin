@@ -2,7 +2,15 @@ module Data.Depsolver.Repository
     (
     -- ** Repositories
       Repository
+    , mkRepository
     , emptyRepository
+    , repoPackages
+
+    -- ** Packages
+    , PackageDesc
+    , mkPackage
+    , packageName
+    , packageVersion
 
     -- ** Versions
     , Version
@@ -10,14 +18,23 @@ module Data.Depsolver.Repository
     , toVersionList
     ) where
 
+
 -- | Repository containing information about available
 -- | packages.
-newtype Repository = Repository ()
-    deriving (Eq, Show)
+newtype Repository = Repository {
+      -- ^ Available packages in the repository.
+      repoPackages :: [PackageDesc]
+    } deriving (Eq, Show)
+
+
+-- | Create a new repository with the given package descriptions.
+mkRepository :: [PackageDesc] -> Repository
+mkRepository = Repository
+
 
 -- | Repository with no packages.
 emptyRepository :: Repository
-emptyRepository = Repository ()
+emptyRepository = Repository { repoPackages = [] }
 
 
 newtype Version = Version [String]
@@ -38,3 +55,18 @@ mkVersion = Version
 -- | @toVersionList (mkVersion ["1", "0"]) == ["1", "0"]@
 toVersionList :: Version -> [String]
 toVersionList (Version vs) = vs
+
+
+data PackageDesc = PackageDesc {
+      -- ^ Name of the package.
+      packageName :: String
+      -- ^ Version of the package.
+    , packageVersion :: Version
+    } deriving (Eq, Show)
+
+
+mkPackage :: String -> Version -> PackageDesc
+mkPackage name version =
+    PackageDesc { packageName = name
+                , packageVersion = version
+                }

@@ -3,14 +3,33 @@ module Data.Depsolver.Parse
     , parseVersion
     ) where
 
+import qualified Text.JSON as TJ
+
 import Data.Depsolver.Repository
-    (Repository, emptyRepository, Version, mkVersion)
+    ( Repository
+    , mkRepository
+    , mkPackage
+    , Version
+    , mkVersion )
 
 
 -- | Attempt to parse a string into a repository.
 parseRepo :: String -> Maybe Repository
-parseRepo "[]" = Just emptyRepository
-parseRepo _    = Nothing
+parseRepo rs = do
+  TJ.JSArray repoJson <- resToMaybe $ TJ.decodeStrict rs
+  packages <- mapM parsePackage repoJson
+  pure $ mkRepository packages
+    where parsePackage (TJ.JSObject p) = do
+              let packageMap = TJ.fromJSObject p
+              name <- lookup "name" packageMap >>= parseName
+              version <- lookup "version" packageMap >>= wantString >>= parseVersion
+              pure $ mkPackage name version
+          parsePackage _ = Nothing
+          resToMaybe =
+              either (const Nothing) Just . TJ.resultToEither
+          wantString (TJ.JSString s) = Just $ TJ.fromJSString s
+          wantString _ = Nothing
+          parseName = wantString
 
 
 -- | Parse a package version.
