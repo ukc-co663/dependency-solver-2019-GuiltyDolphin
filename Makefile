@@ -11,9 +11,6 @@ test: compile
 	./run_tests.sh
 
 clean:
-	rm -rf classes
+	stack clean
 
-reallyclean: clean
-	rm -rf lib deps
-
-.PHONY: all compile test clean reallyclean
+.PHONY: all compile test clean
