@@ -1,16 +1,16 @@
-all: compile
+all: build
 
-compile: deps
-	./compile.sh
+build: deps
+	stack build
 
 deps:
 	./install_deps.sh
 	touch deps
 
-test: compile
-	./run_tests.sh
+test:
+	stack test
 
 clean:
 	stack clean
 
-.PHONY: all compile test clean
+.PHONY: all build test clean
