@@ -2,6 +2,7 @@ module Data.Depsolver.Parse
     ( parseRepo
     , parseVersion
     , parseDependency
+    , parseRepoState
     ) where
 
 import qualified Text.JSON as TJ
@@ -13,6 +14,20 @@ import Data.Depsolver.Repository
     , Version
     , mkVersion )
 import qualified Data.Depsolver.Repository as R
+
+
+wantString :: TJ.JSValue -> Maybe String
+wantString (TJ.JSString s) = Just $ TJ.fromJSString s
+wantString _ = Nothing
+
+
+wantStrings :: TJ.JSValue -> Maybe [String]
+wantStrings (TJ.JSArray a) = mapM wantString a
+wantStrings _ = Nothing
+
+
+resToMaybe :: TJ.Result a -> Maybe a
+resToMaybe = either (const Nothing) Just . TJ.resultToEither
 
 
 -- | Attempt to parse a string into a repository.
@@ -31,12 +46,6 @@ parseRepo rs = do
               conflicts <- maybe (pure []) parseConflicts optConflicts
               pure $ mkPackage name version deps conflicts
           parsePackage _ = Nothing
-          resToMaybe =
-              either (const Nothing) Just . TJ.resultToEither
-          wantString (TJ.JSString s) = Just $ TJ.fromJSString s
-          wantString _ = Nothing
-          wantStrings (TJ.JSArray a) = mapM wantString a
-          wantStrings _ = Nothing
           parseName = wantString
           parseDeps (TJ.JSArray deps) =
               mapM ((>>= mapM parseDependency) . wantStrings) deps
@@ -77,3 +86,18 @@ parseDependency ds =
                                                  _   -> error "pattern already satisfied"
                                               , vs)
           in parseVersion verStr >>= pure . R.mkDependency pname vop
+
+
+-- | Parse a JSON list of installed packages as a 'RepoState'.
+parseRepoState :: String -> Maybe R.RepoState
+parseRepoState s = do
+  stateJson <- resToMaybe $ TJ.decodeStrict s
+  vs <- wantStrings stateJson
+  R.mkRepoState <$> mapM parsePackState vs
+  where
+    parsePackState pv =
+        case break (=='=') pv of
+          (name, '=':versionStr) -> do
+                                version <- parseVersion versionStr
+                                pure $ (name, version)
+          _ -> Nothing

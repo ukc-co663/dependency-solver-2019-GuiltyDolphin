@@ -6,6 +6,11 @@ module Data.Depsolver.Repository
     , emptyRepository
     , repoPackages
 
+    -- ** Repository States
+    , RepoState
+    , mkRepoState
+    , emptyRepoState
+
     -- ** Packages
     , PackageDesc
     , mkPackage
@@ -42,6 +47,22 @@ mkRepository = Repository
 -- | Repository with no packages.
 emptyRepository :: Repository
 emptyRepository = Repository { repoPackages = [] }
+
+
+-- | The list of installed packages (and their versions).
+newtype RepoState = RepoState [(String, Version)]
+    deriving (Eq, Show)
+
+
+-- | Create a new repository state with the given installed
+-- | packages.
+mkRepoState :: [(String, Version)] -> RepoState
+mkRepoState = RepoState
+
+
+-- | The state of a repository with no installed packages.
+emptyRepoState :: RepoState
+emptyRepoState = RepoState []
 
 
 newtype Version = Version [String]

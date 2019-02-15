@@ -13,12 +13,18 @@ import Data.Depsolver.Repository
     , packageVersion
     , packageDependencies
     , packageConflicts
+    , emptyRepoState
     , mkDependency
     , mkVersion
     )
 import qualified Data.Depsolver.Repository as R
 
-import Data.Depsolver.Parse (parseRepo, parseVersion, parseDependency)
+import Data.Depsolver.Parse
+    ( parseRepo
+    , parseVersion
+    , parseDependency
+    , parseRepoState
+    )
 
 
 verMatchB2 :: R.VersionMatch
@@ -35,6 +41,15 @@ verMatchC71 = mkDependency "C" R.VEQ (mkVersion ["7", "1"])
 
 conflictsC :: [R.VersionMatch]
 conflictsC = [verMatchC71]
+
+
+exampleRepoState1 :: R.RepoState
+exampleRepoState1 = R.mkRepoState [("A", mkVersion ["1"])]
+
+
+exampleRepoState2 :: R.RepoState
+exampleRepoState2 =
+    R.mkRepoState [("A", mkVersion ["1"]), ("B", mkVersion ["2", "7"])]
 
 
 packageUnspecifiedDepsAndConflicts :: PackageDesc
@@ -109,5 +124,12 @@ spec = do
             parseDependency "A<1" `shouldBe` Just (mkDependency "A" R.VLT version1)
          it "(>)" $
             parseDependency "A>1" `shouldBe` Just (mkDependency "A" R.VGT version1)
+  describe "parseRepoState" $ do
+         it "empty repository" $
+            parseRepoState "[]" `shouldBe` Just emptyRepoState
+         it "repository with a single package" $
+            parseRepoState "[\"A=1\"]" `shouldBe` Just exampleRepoState1
+         it "repository with two packages" $
+            parseRepoState "[\"A=1\", \"B=2.7\"]" `shouldBe` Just exampleRepoState2
       where version1 = mkVersion ["1"]
             version2 = mkVersion ["2"]
