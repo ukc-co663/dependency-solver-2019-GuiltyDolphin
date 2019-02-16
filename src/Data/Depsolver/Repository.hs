@@ -19,11 +19,17 @@ module Data.Depsolver.Repository
     , packageVersion
     , packageDependencies
     , packageConflicts
+    , PackageName
+    , mkPackageName
 
     -- ** Dependencies
     , VersionMatch
     , VersionCmp(..)
     , mkDependency
+
+    -- ** Installed Packages
+    , PackageVersion
+    , mkPackageVersion
 
     -- ** Versions
     , Version

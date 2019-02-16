@@ -11,6 +11,8 @@ import Data.Depsolver.Repository
     , mkRepoState
     , mkVersion
     , mkPackage
+    , mkPackageName
+    , mkPackageVersion
     , toVersionList
     )
 
@@ -31,9 +33,9 @@ spec = do
             property (\p -> forAll (gen2 (repoWithoutPackage p, repoStateWithPackage p))
                       (\(repo, repoState) -> not (validState repo repoState)))
          it "simple case: package with same name but different version in state" $
-            let repo = mkRepository [mkPackage "A" (mkVersion ["1"]) [] []]
-                repoState = mkRepoState [("A", mkVersion ["2"])]
+            let repo = mkRepository [mkPackage (mkPackageName "A") (mkVersion ["1"]) [] []]
+                repoState = mkRepoState [mkPackageVersion (mkPackageName "A") (mkVersion ["2"])]
             in validState repo repoState `shouldBe` False
          it "a state is not valid if it contains a package name and version that is not in the repository" $
-            property (\(p, v) -> forAll (gen2 (repoWithoutPackageVersion p v, repoStateWithPackageVersion p v))
+            property (\p -> forAll (gen2 (repoWithoutPackageVersion p, repoStateWithPackageVersion p))
                       (\(repo, repoState) -> not (validState repo repoState)))

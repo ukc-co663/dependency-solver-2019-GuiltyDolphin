@@ -34,15 +34,16 @@ deleteRepoPackagesBy p = RI.mkRepository . filter p . RI.repoPackages
 
 -- | Generate a repository that is guaranteed not to contain
 -- | the given package name.
-repoWithoutPackage :: String -> Gen RI.Repository
+repoWithoutPackage :: RI.PackageName -> Gen RI.Repository
 repoWithoutPackage pname = deleteRepoPackageByName pname <$> arbitrary
     where deleteRepoPackageByName n = deleteRepoPackagesBy ((/=n) . RI.packageName)
 
 
 -- | Generate a repository that is guaranteed not to contain
 -- | the given package with the specified version.
-repoWithoutPackageVersion :: String -> RI.Version -> Gen RI.Repository
-repoWithoutPackageVersion pname version = deleteRepoPackageByNameVersion <$> arbitrary
+repoWithoutPackageVersion :: RI.PackageVersion -> Gen RI.Repository
+repoWithoutPackageVersion (RI.PackageVersion (pname, version)) =
+    deleteRepoPackageByNameVersion <$> arbitrary
     where deleteRepoPackageByNameVersion =
               RI.mkRepository . filter notPV . RI.repoPackages
           notPV p = RI.packageName p /= pname && RI.packageVersion p /= version
@@ -62,24 +63,32 @@ instance Arbitrary RI.PackageDesc where
                 }
 
 
+instance Arbitrary RI.PackageName where
+    arbitrary = fmap RI.mkPackageName $ listOf1 (elements pnameChar)
+        where pnameChar = '.' : '-' : ['a'..'z'] <> ['A'..'Z'] <> ['0'..'9']
+
+
 deriving instance Arbitrary RI.RepoState
 
 
 -- | Generate a repository state that is guaranteed to have
 -- | an entry for the given package.
-repoStateWithPackage :: String -> Gen RI.RepoState
+repoStateWithPackage :: RI.PackageName -> Gen RI.RepoState
 repoStateWithPackage pname = do
   version <- arbitrary
-  repoStateWithPackageVersion pname version
+  repoStateWithPackageVersion (RI.mkPackageVersion pname version)
 
 
 -- | Generate a repository state that is guaranteed to have
 -- | an entry for the given package.
-repoStateWithPackageVersion :: String -> RI.Version -> Gen RI.RepoState
-repoStateWithPackageVersion pname version = do
-  fmap (addRepoStatePackage (pname, version)) arbitrary
+repoStateWithPackageVersion :: RI.PackageVersion -> Gen RI.RepoState
+repoStateWithPackageVersion p = do
+  fmap (addRepoStatePackage p) arbitrary
     where addRepoStatePackage pv =
               RI.mkRepoState . (pv:) . RI.repoStatePackageVersions
+
+
+deriving instance Arbitrary RI.PackageVersion
 
 
 instance Arbitrary RI.Version where
