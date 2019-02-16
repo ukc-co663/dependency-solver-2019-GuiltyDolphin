@@ -48,25 +48,40 @@ spec = do
                 repoState = mkRepoState [mkPackageVersion (mkPackageName "A") (mkVersion ["2"])]
             in (repo, repoState) `shouldNotSatisfy` uncurry validState
          it "a state is not valid if it contains a package name and version that is not in the repository" $
-            propStateInvalid1 withoutPackage repoStateWithPackageVersion
+            propStateInvalid1 withoutPackage repoStateWithPackageVersions1
+         context "all dependencies met" $ do
+                 it "A>>[], [A]" $
+                    propStateValid1 newPackage repoStateWithPackageVersions1
+                 it "A>>B, [A, B]" $
+                    propStateValid2 makeDependency repoStateWithPackageVersions2
+                 it "A>>B, B>>C, [A, B, C]" $
+                    propStateValid3 makeTransDep repoStateWithPackageVersions3
+                 it "A>>B, B>>A, [A, B]" $
+                    propStateValid2 (\p1 p2 -> do
+                                       makeDependency p1 p2
+                                       makeDependency p2 p1) repoStateWithPackageVersions2
          context "unmet dependencies" $ do
                  it "A>>B, [A]" $
-                    propStateInvalid2 makeDependency (\p1 _ -> repoStateWithPackageVersion p1)
+                    propStateInvalid2 makeDependency (\p1 _ -> repoStateWithPackageVersions1 p1)
                  it "A>>B, B>>C, [A, B]" $
-                    propStateInvalid3 (\p1 p2 p3 -> do
-                                         makeDependency p1 p2
-                                         makeDependency p2 p3) (\p1 p2 _ -> repoStateWithPackageVersions [p1, p2])
+                    propStateInvalid3 makeTransDep (\p1 p2 _ -> repoStateWithPackageVersions2 p1 p2)
                  it "A>>B, B>>C, [A, C]" $
-                    propStateInvalid3 (\p1 p2 p3 -> do
-                                         makeDependency p1 p2
-                                         makeDependency p2 p3) (\p1 _ p3 -> repoStateWithPackageVersions [p1, p3])
+                    propStateInvalid3 makeTransDep (\p1 _ p3 -> repoStateWithPackageVersions2 p1 p3)
          it "a state is not valid if it contains conflicting packages" $
             propStateInvalid2 makeConflict repoStateWithPackageVersions2
          it "a state is not valid if it contains a wildcard conflict" $
             propStateInvalid2 makeWildConflict repoStateWithPackageVersions2
-      where checkStateInvalid rg stateGen =
-                forAll (gen2 (execRepoGen rg, stateGen)) (not . uncurry validState)
+      where checkRepoWithState p rg stateGen =
+                forAll (gen2 (execRepoGen rg, stateGen)) p
+            checkStateValid   = checkRepoWithState (uncurry validState)
+            propStateValid1 rg stateGen = property $ \p1 -> checkStateValid (rg p1) (stateGen p1)
+            propStateValid2 rg stateGen = property $ \(p1, p2) -> checkStateValid (rg p1 p2) (stateGen p1 p2)
+            propStateValid3 rg stateGen = property $ \(p1, p2, p3) -> checkStateValid (rg p1 p2 p3) (stateGen p1 p2 p3)
+            checkStateInvalid = checkRepoWithState (not . uncurry validState)
             propStateInvalid1 rg stateGen = property $ \p1 -> checkStateInvalid (rg p1) (stateGen p1)
             propStateInvalid2 rg stateGen = property $ \(p1, p2) -> checkStateInvalid (rg p1 p2) (stateGen p1 p2)
             propStateInvalid3 rg stateGen = property $ \(p1, p2, p3) -> checkStateInvalid (rg p1 p2 p3) (stateGen p1 p2 p3)
-            repoStateWithPackageVersions2 p1 p2 = repoStateWithPackageVersions [p1, p2]
+            repoStateWithPackageVersions1 p1 = pure $ repoStateWithPackageVersions [p1]
+            repoStateWithPackageVersions2 p1 p2 = pure $ repoStateWithPackageVersions [p1, p2]
+            repoStateWithPackageVersions3 p1 p2 p3 = pure $ repoStateWithPackageVersions [p1, p2, p3]
+            makeTransDep p1 p2 p3 = makeDependency p1 p2 >> makeDependency p2 p3

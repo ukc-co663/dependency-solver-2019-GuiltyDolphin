@@ -11,10 +11,10 @@ module TestHelper
     , makeDependency
     , makeConflict
     , makeWildConflict
+    , newPackage
     , withoutPackage
     , withoutPackageName
     , repoStateWithPackage
-    , repoStateWithPackageVersion
     , repoStateWithPackageVersions
     , mkPackageString
     , mkPackageStringFull
@@ -200,6 +200,15 @@ modifyPackages :: ([RI.PackageDesc] -> [RI.PackageDesc]) -> RepoGen ()
 modifyPackages f = modify (RI.mkRepository . f . RI.repoPackages)
 
 
+-- | Create a new package with no dependencies or conflicts.
+-- | If a package with the given identifier already exists,
+-- | it is overwritten.
+newPackage :: RI.PackageVersion -> RepoGen ()
+newPackage (RI.PackageVersion (pname, pversion)) =
+    let p = RI.mkPackage pname pversion [] []
+    in putPackage p
+
+
 putPackage :: RI.PackageDesc -> RepoGen ()
 putPackage p =
     modifyPackages insertPackageUniquely
@@ -208,27 +217,30 @@ putPackage p =
 
 
 makeConflict :: RI.PackageVersion -> RI.PackageVersion -> RepoGen ()
-makeConflict p1pv (RI.PackageVersion (p2name, p2version)) = do
+makeConflict p1pv p2pv = do
     p1 <- lookupOrNew p1pv
-    let dep = RI.mkDependency p2name RI.VEQ p2version
+    p2 <- lookupOrNew p2pv
+    let dep = RI.mkDependency (RI.packageName p2) RI.VEQ (RI.packageVersion p2)
         p1' = RI.mkPackage (RI.packageName p1) (RI.packageVersion p1)
               (RI.packageDependencies p1) (dep : RI.packageConflicts p1)
     putPackage p1'
 
 
 makeWildConflict :: RI.PackageVersion -> RI.PackageVersion -> RepoGen ()
-makeWildConflict p1pv (RI.PackageVersion (p2name, _)) = do
+makeWildConflict p1pv p2pv = do
     p1 <- lookupOrNew p1pv
-    let dep = RI.mkWildcardDependency p2name
+    p2 <- lookupOrNew p2pv
+    let dep = RI.mkWildcardDependency (RI.packageName p2)
         p1' = RI.mkPackage (RI.packageName p1) (RI.packageVersion p1)
               (RI.packageDependencies p1) (dep : RI.packageConflicts p1)
     putPackage p1'
 
 
 makeDependency :: RI.PackageVersion -> RI.PackageVersion -> RepoGen ()
-makeDependency p1pv (RI.PackageVersion (p2name, p2version)) = do
+makeDependency p1pv p2pv = do
     p1 <- lookupOrNew p1pv
-    let dep = RI.mkDependency p2name RI.VEQ p2version
+    p2 <- lookupOrNew p2pv
+    let dep = RI.mkDependency (RI.packageName p2) RI.VEQ (RI.packageVersion p2)
         p1' = RI.mkPackage (RI.packageName p1) (RI.packageVersion p1)
               ([dep] : RI.packageDependencies p1) (RI.packageConflicts p1)
     putPackage p1'
@@ -261,21 +273,14 @@ deriving instance Arbitrary RI.RepoState
 repoStateWithPackage :: RI.PackageName -> Gen RI.RepoState
 repoStateWithPackage pname = do
   version <- arbitrary
-  repoStateWithPackageVersion (RI.mkPackageVersion pname version)
+  pure $ repoStateWithPackageVersions [RI.mkPackageVersion pname version]
 
 
--- | Generate a repository state that is guaranteed to have
--- | an entry for the given package.
-repoStateWithPackageVersion :: RI.PackageVersion -> Gen RI.RepoState
-repoStateWithPackageVersion p = repoStateWithPackageVersions [p]
-
-
--- | Generate a repository state that is guaranteed to have
--- | an entry for each of the given package versions.
-repoStateWithPackageVersions :: [RI.PackageVersion] -> Gen RI.RepoState
-repoStateWithPackageVersions pvs = do
-  repoState <- arbitrary
-  pure $ foldl' addRepoStatePackage repoState pvs
+-- | Create a new repository state with the given package versions.
+repoStateWithPackageVersions :: [RI.PackageVersion] -> RI.RepoState
+repoStateWithPackageVersions pvs =
+  let repoState = RI.emptyRepoState
+  in foldl' addRepoStatePackage repoState pvs
     where addRepoStatePackage rs pv =
               RI.mkRepoState . (pv:) . RI.repoStatePackageVersions $ rs
 
