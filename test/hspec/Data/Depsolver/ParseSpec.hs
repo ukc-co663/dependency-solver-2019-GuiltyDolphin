@@ -1,7 +1,5 @@
 module Data.Depsolver.ParseSpec (spec) where
 
-import Data.List (intersperse)
-
 import TestHelper
 
 import Data.Depsolver.Repository
@@ -69,27 +67,6 @@ packageBasic =
     mkPackage nameA (mkVersion ["1"]) depsB conflictsC
 
 
-mkPackageString :: String -> String -> String
-mkPackageString name version =
-    concat ["{\"name\": \"", name, "\", \"version\": \"", version, "\"}"]
-
-
-mkPackageStringFull :: String -> String -> [[String]] -> [String] -> String
-mkPackageStringFull name version deps conflicts =
-    concat [ "{"
-           ,       kvs "name" name
-           , ", ", kvs "version" version
-           , ", ", kv  "depends" (show deps)
-           , ", ", kv  "conflicts" (show conflicts)
-           , "}"]
-    where kv k v  = concat ["\"", k, "\": ", v]
-          kvs k v = kv k ('"':v++"\"")
-
-
-mkRepoString :: [String] -> String
-mkRepoString packageStrings = '[' : concat (intersperse "," packageStrings) ++ "]"
-
-
 spec :: Spec
 spec = do
   describe "(parse . show) is identity" $ do
@@ -112,8 +89,7 @@ spec = do
                      `shouldBe` Just [packageUnspecifiedDepsAndConflicts]
          it "parses repository with basic package" $ do
             let parseRes = fmap repoPackages
-                           (parseRepo $ mkRepoString
-                                          [mkPackageStringFull "A" "1" [["B=2"]] ["C=7.1"]])
+                           (parseRepo $ mkRepoStringFromSpecs [("A", "1", [["B=2"]], ["C=7.1"])])
             parseRes `shouldBe` Just [packageBasic]
             fmap packageName    <$> parseRes `shouldBe` Just [nameA]
             fmap packageVersion <$> parseRes `shouldBe` Just [version1]

@@ -37,7 +37,7 @@ module Data.Depsolver.Repository.Internal
 
 
 import Control.Arrow ((&&&))
-import Data.List (intersperse)
+import Data.List (find, intersperse)
 import Data.Maybe (fromMaybe)
 
 import qualified Text.JSON as TJ
@@ -73,6 +73,10 @@ emptyRepository :: Repository
 emptyRepository = Repository { repoPackages = [] }
 
 
+getPackage :: Repository -> PackageVersion -> Maybe PackageDesc
+getPackage r pv = find (\p -> pv == toPackageVersion p) (repoPackages r)
+
+
 -- | The list of installed packages (and their versions).
 newtype RepoState = RepoState {
       -- ^ Packages and their installed version.
@@ -101,10 +105,17 @@ emptyRepoState = RepoState []
 -- | True if the state is valid given the constraints of
 -- | the repository.
 validState :: Repository -> RepoState -> Bool
-validState r = all containsPackage . repoStatePackageVersions
-    where containsPackage package =
-              (getPackageVersion package)
-              `elem` map (packageName&&&packageVersion) (repoPackages r)
+validState r rs = all meetsPackageDependencies . repoStatePackageVersions $ rs
+    where meetsPackageDependencies pv =
+              maybe False (meetsADependency . packageDependencies) (getPackage r pv)
+          stateMeetsDependency [vm] =
+            maybe False stateHasPackage $ repoProvidesMatchingPackage vm
+          stateMeetsDependency _ = False
+          repoProvidesMatchingPackage (VersionMatch pname _ version) =
+              getPackage r (mkPackageVersion pname version)
+          stateHasPackage pv = (toPackageVersion pv) `elem` (repoStatePackageVersions rs)
+          meetsADependency [] = True
+          meetsADependency deps = any stateMeetsDependency deps
 
 
 newtype PackageName = PackageName { getPackageName :: String }
@@ -243,6 +254,10 @@ mkPackage name version deps conflicts =
                 , packageDependencies = deps
                 , packageConflicts = conflicts
                 }
+
+
+toPackageVersion :: PackageDesc -> PackageVersion
+toPackageVersion = uncurry mkPackageVersion . (packageName&&&packageVersion)
 
 
 data VersionCmp = VLTE | VLT | VEQ | VGT | VGTE
