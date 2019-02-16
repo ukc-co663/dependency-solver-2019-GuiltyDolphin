@@ -13,6 +13,7 @@ import Data.Depsolver.Repository
     , packageConflicts
     , emptyRepoState
     , mkDependency
+    , mkWildcardDependency
     , mkVersion
     )
 import qualified Data.Depsolver.Repository as R
@@ -116,6 +117,8 @@ spec = do
          cmpTest "<=" R.VLTE
          cmpTest "<" R.VLT
          cmpTest ">" R.VGT
+         it "wildcard" $
+            parseDependency "\"A\"" `shouldBe` Just (mkWildcardDependency nameA)
   describe "parseRepoState" $ do
          it "empty repository" $
             parseRepoState "[]" `shouldBe` Just emptyRepoState

@@ -23,6 +23,7 @@ module Data.Depsolver.Repository.Internal
     , VersionMatch(..)
     , VersionCmp(..)
     , mkDependency
+    , mkWildcardDependency
 
     -- ** Installed Packages
     , PackageVersion(..)
@@ -113,6 +114,7 @@ validState r rs = all meetsPackageDependencies . repoStatePackageVersions $ rs
           stateMeetsDependency _ = False
           repoProvidesMatchingPackage (VersionMatch pname _ version) =
               getPackage r (mkPackageVersion pname version)
+          repoProvidesMatchingPackage _ = Nothing
           stateHasPackage pv = (toPackageVersion pv) `elem` (repoStatePackageVersions rs)
           meetsADependency [] = True
           meetsADependency deps = any stateMeetsDependency deps
@@ -274,11 +276,13 @@ instance Show VersionCmp where
 
 
 data VersionMatch = VersionMatch PackageName VersionCmp Version
+                  | VersionMatchWild PackageName
                     deriving (Eq)
 
 
 instance Show VersionMatch where
     show (VersionMatch p cmp v) = concat [show p, show cmp, show v]
+    show (VersionMatchWild p) = show p
 
 
 instance TJ.JSON VersionMatch where
@@ -287,7 +291,7 @@ instance TJ.JSON VersionMatch where
         where parseDependency :: String -> TJ.Result VersionMatch
               parseDependency ds =
                   case break (`elem` "<=>") ds of
-                    (_, "") -> TJ.Error "version specifier operator"
+                    (pname, "") -> pure . mkWildcardDependency . mkPackageName $ pname
                     (pname, op:vs) ->
                         let (vop, verStr) = case op of
                                               '=' -> (VEQ, vs)
@@ -308,3 +312,7 @@ instance TJ.JSON VersionMatch where
 
 mkDependency :: PackageName -> VersionCmp -> Version -> VersionMatch
 mkDependency = VersionMatch
+
+
+mkWildcardDependency :: PackageName -> VersionMatch
+mkWildcardDependency = VersionMatchWild

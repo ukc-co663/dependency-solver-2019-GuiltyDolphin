@@ -196,9 +196,11 @@ instance Arbitrary RI.Version where
 instance Arbitrary RI.VersionMatch where
     arbitrary = do
       name <- arbitrary
-      compType <- arbitrary
-      version <- arbitrary
-      pure $ RI.VersionMatch name compType version
+      frequency  $ [ (7, do
+                        compType <- arbitrary
+                        version <- arbitrary
+                        pure $ RI.VersionMatch name compType version)
+                   , (3, pure $ RI.VersionMatchWild name) ]
 
 
 instance Arbitrary RI.VersionCmp where

@@ -26,6 +26,7 @@ module Data.Depsolver.Repository
     , VersionMatch
     , VersionCmp(..)
     , mkDependency
+    , mkWildcardDependency
 
     -- ** Installed Packages
     , PackageVersion
