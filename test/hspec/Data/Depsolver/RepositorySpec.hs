@@ -42,26 +42,21 @@ spec = do
          it "the empty repository is not valid with any non-empty state" $
             property (\state -> state /= emptyRepoState ==> not (validState emptyRepository state))
          it "a state is not valid if it contains a package name that is not in the repository" $
-            property (\p -> forAll (gen2 ( execRepoGen (withoutPackageName p)
-                                         , repoStateWithPackage p))
-                      (\(repo, repoState) -> not (validState repo repoState)))
+            propStateInvalid1 withoutPackageName repoStateWithPackage
          it "simple case: package with same name but different version in state" $
             let repo = mkRepository [mkPackage (mkPackageName "A") (mkVersion ["1"]) [] []]
                 repoState = mkRepoState [mkPackageVersion (mkPackageName "A") (mkVersion ["2"])]
             in (repo, repoState) `shouldNotSatisfy` uncurry validState
          it "a state is not valid if it contains a package name and version that is not in the repository" $
-            property (\p -> forAll (gen2 ( execRepoGen (withoutPackage p)
-                                         , repoStateWithPackageVersion p))
-                      (\(repo, repoState) -> not (validState repo repoState)))
+            propStateInvalid1 withoutPackage repoStateWithPackageVersion
          it "a state is not valid if it contains packages with unmet dependencies" $
-            property (\(p1, p2) -> forAll (gen2 ( execRepoGen (makeDependency p1 p2)
-                                                , repoStateWithPackageVersion p1))
-                      (\(repo, repoState) -> not (validState repo repoState)))
+            propStateInvalid2 makeDependency (\p1 _ -> repoStateWithPackageVersion p1)
          it "a state is not valid if it contains conflicting packages" $
-            property (\(p1, p2) -> forAll (gen2 ( execRepoGen (makeConflict p1 p2)
-                                                , repoStateWithPackageVersions [p1, p2]))
-                      (\(repo, repoState) -> not (validState repo repoState)))
+            propStateInvalid2 makeConflict repoStateWithPackageVersions2
          it "a state is not valid if it contains a wildcard conflict" $
-            property (\(p1, p2) -> forAll (gen2 ( execRepoGen (makeWildConflict p1 p2)
-                                                , repoStateWithPackageVersions [p1, p2] ))
-                      (\(repo, repoState) -> not (validState repo repoState)))
+            propStateInvalid2 makeWildConflict repoStateWithPackageVersions2
+      where checkStateInvalid rg stateGen =
+                forAll (gen2 (execRepoGen rg, stateGen)) (not . uncurry validState)
+            propStateInvalid1 rg stateGen = property $ \p1 -> checkStateInvalid (rg p1) (stateGen p1)
+            propStateInvalid2 rg stateGen = property $ \(p1, p2) -> checkStateInvalid (rg p1 p2) (stateGen p1 p2)
+            repoStateWithPackageVersions2 p1 p2 = repoStateWithPackageVersions [p1, p2]
