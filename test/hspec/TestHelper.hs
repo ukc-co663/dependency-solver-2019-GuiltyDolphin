@@ -18,16 +18,36 @@ module TestHelper
     , repoExamples
     , getExampleRepo
     , getExampleValidStates
+    , fileCaseExamples
     ) where
 
 import Test.Hspec
 import Test.QuickCheck
 
+import Control.Monad.IO.Class (MonadIO, liftIO)
 import Data.List (foldl', intersperse)
 import Data.Maybe (fromJust)
+import System.FilePath ((</>))
+
+import qualified System.FilePath.Find as Find
+import System.FilePath.Find ((==?), (&&?), (~~?), always)
 
 import qualified Data.Depsolver.Parse as P
 import qualified Data.Depsolver.Repository.Internal as RI
+
+
+fileCaseExamples :: (MonadIO m) => m [(FilePath, (RI.Repository, RI.RepoState))]
+fileCaseExamples = do
+  directories <- liftIO $ Find.find always (Find.fileType ==? Find.Directory
+                                           &&? Find.fileName ~~? "(seen|example)-*") testCasesDir
+  let exampleFiles = map (\d -> (d, (d </> "repository.json", d </> "initial.json"))) directories
+  mapM (\(d, (repoFile, repoStateFile)) -> do
+          repoS <- liftIO $ readFile repoFile
+          repoStateS <- liftIO $ readFile repoStateFile
+          let Just repo = P.parseRepo repoS
+              Just repoState = P.parseRepoState repoStateS
+          pure (d, (repo, repoState))) exampleFiles
+  where testCasesDir = "test/cases"
 
 
 data RepoExample = RepoExample

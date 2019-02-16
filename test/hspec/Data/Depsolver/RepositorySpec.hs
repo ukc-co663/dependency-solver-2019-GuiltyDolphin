@@ -31,6 +31,11 @@ spec = do
                    let er' = getExampleRepo er
                    mapM_ (\es -> (er', es) `shouldSatisfy` uncurry validState) (getExampleValidStates er))
                           repoExamples
+  describe "fileCases" $ do
+         describe "example valid states are valid" $
+                  runIO fileCaseExamples >>=
+                        mapM_ (\(dir, (repo, repoState))
+                                   -> it dir (validState repo repoState `shouldBe` True))
   describe "validState" $ do
          it "the empty state is valid for any repository" $
             property (\repo -> validState repo emptyRepoState)

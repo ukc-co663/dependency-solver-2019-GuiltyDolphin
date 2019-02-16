@@ -50,3 +50,5 @@ tests:
     - depsolver
     - hspec
     - QuickCheck
+    - filemanip
+    - filepath
