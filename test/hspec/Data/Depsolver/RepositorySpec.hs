@@ -53,16 +53,16 @@ spec = do
                  it "A>>[], [A]" $
                     propStateValid1 newPackage repoStateWithPackageVersions1
                  it "A>>B, [A, B]" $
-                    propStateValid2 makeDependency repoStateWithPackageVersions2
+                    propStateValid2 makeDependency1 repoStateWithPackageVersions2
                  it "A>>B, B>>C, [A, B, C]" $
                     propStateValid3 makeTransDep repoStateWithPackageVersions3
                  it "A>>B, B>>A, [A, B]" $
                     propStateValid2 (\p1 p2 -> do
-                                       makeDependency p1 p2
-                                       makeDependency p2 p1) repoStateWithPackageVersions2
+                                       makeDependency1 p1 p2
+                                       makeDependency1 p2 p1) repoStateWithPackageVersions2
          context "unmet dependencies" $ do
                  it "A>>B, [A]" $
-                    propStateInvalid2 makeDependency (\p1 _ -> repoStateWithPackageVersions1 p1)
+                    propStateInvalid2 makeDependency1 (\p1 _ -> repoStateWithPackageVersions1 p1)
                  it "A>>B, B>>C, [A, B]" $
                     propStateInvalid3 makeTransDep (\p1 p2 _ -> repoStateWithPackageVersions2 p1 p2)
                  it "A>>B, B>>C, [A, C]" $
@@ -72,17 +72,41 @@ spec = do
                     propStateInvalid2 makeConflict repoStateWithPackageVersions2
                  it "A~B, [A, B]" $
                     propStateInvalid2 makeWildConflict repoStateWithPackageVersions2
+                 it "A>>[B,C] B~C [anything with A]" $
+                    propStateInvalid3' (\p1 p2 p3 -> do
+                                         makeDependency p1 [p2, p3]
+                                         makeConflict p2 p3)
+                                      (\r p1 _ _ -> repoStateContaining r [p1])
+                 it "A~A, [any state with A]" $
+                    propStateInvalid1' (\p -> makeConflict p p)
+                                      (\r p -> repoStateContaining r [p])
       where checkRepoWithState p rg stateGen =
                 forAll (gen2 (execRepoGen rg, stateGen)) p
+            checkRepoWithState' p rg stateGen =
+                forAll (do
+                         repo <- execRepoGen rg
+                         state <- stateGen repo
+                         pure (repo, state)) p
+
             checkStateValid   = checkRepoWithState (uncurry validState)
             propStateValid1 rg stateGen = property $ \p1 -> checkStateValid (rg p1) (stateGen p1)
             propStateValid2 rg stateGen = property $ \(p1, p2) -> checkStateValid (rg p1 p2) (stateGen p1 p2)
             propStateValid3 rg stateGen = property $ \(p1, p2, p3) -> checkStateValid (rg p1 p2 p3) (stateGen p1 p2 p3)
+
             checkStateInvalid = checkRepoWithState (not . uncurry validState)
             propStateInvalid1 rg stateGen = property $ \p1 -> checkStateInvalid (rg p1) (stateGen p1)
             propStateInvalid2 rg stateGen = property $ \(p1, p2) -> checkStateInvalid (rg p1 p2) (stateGen p1 p2)
             propStateInvalid3 rg stateGen = property $ \(p1, p2, p3) -> checkStateInvalid (rg p1 p2 p3) (stateGen p1 p2 p3)
+
+            checkStateInvalid' = checkRepoWithState' (not . uncurry validState)
+            propStateInvalid1' rg stateGen =
+                property $ \p1 -> checkStateInvalid' (rg p1) (\r -> stateGen r p1)
+            propStateInvalid3' rg stateGen =
+                property $ \(p1, p2, p3) -> checkStateInvalid' (rg p1 p2 p3) (\r -> stateGen r p1 p2 p3)
+
             repoStateWithPackageVersions1 p1 = pure $ repoStateWithPackageVersions [p1]
             repoStateWithPackageVersions2 p1 p2 = pure $ repoStateWithPackageVersions [p1, p2]
             repoStateWithPackageVersions3 p1 p2 p3 = pure $ repoStateWithPackageVersions [p1, p2, p3]
-            makeTransDep p1 p2 p3 = makeDependency p1 p2 >> makeDependency p2 p3
+
+            makeDependency1 p1 p2 = makeDependency p1 [p2]
+            makeTransDep p1 p2 p3 = makeDependency1 p1 p2 >> makeDependency1 p2 p3

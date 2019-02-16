@@ -16,6 +16,7 @@ module TestHelper
     , withoutPackageName
     , repoStateWithPackage
     , repoStateWithPackageVersions
+    , repoStateContaining
     , mkPackageString
     , mkPackageStringFull
     , mkRepoString
@@ -236,13 +237,13 @@ makeWildConflict p1pv p2pv = do
     putPackage p1'
 
 
-makeDependency :: RI.PackageVersion -> RI.PackageVersion -> RepoGen ()
-makeDependency p1pv p2pv = do
+makeDependency :: RI.PackageVersion -> [RI.PackageVersion] -> RepoGen ()
+makeDependency p1pv p2pvs = do
     p1 <- lookupOrNew p1pv
-    p2 <- lookupOrNew p2pv
-    let dep = RI.mkDependency (RI.packageName p2) RI.VEQ (RI.packageVersion p2)
+    targets <- mapM lookupOrNew p2pvs
+    let deps = fmap (\target -> RI.mkDependency (RI.packageName target) RI.VEQ (RI.packageVersion target)) targets
         p1' = RI.mkPackage (RI.packageName p1) (RI.packageVersion p1)
-              ([dep] : RI.packageDependencies p1) (RI.packageConflicts p1)
+              (deps : RI.packageDependencies p1) (RI.packageConflicts p1)
     putPackage p1'
 
 
@@ -283,6 +284,13 @@ repoStateWithPackageVersions pvs =
   in foldl' addRepoStatePackage repoState pvs
     where addRepoStatePackage rs pv =
               RI.mkRepoState . (pv:) . RI.repoStatePackageVersions $ rs
+
+
+repoStateContaining :: RI.Repository -> [RI.PackageVersion] -> Gen RI.RepoState
+repoStateContaining repo pvs = do
+  let allowedPackages = fmap RI.toPackageVersion $ RI.repoPackages repo
+  arbyPvs <- sublistOf allowedPackages
+  pure $ RI.mkRepoState (pvs <> arbyPvs)
 
 
 deriving instance Arbitrary RI.PackageVersion
