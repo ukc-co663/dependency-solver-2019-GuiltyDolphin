@@ -67,10 +67,11 @@ spec = do
                     propStateInvalid3 makeTransDep (\p1 p2 _ -> repoStateWithPackageVersions2 p1 p2)
                  it "A>>B, B>>C, [A, C]" $
                     propStateInvalid3 makeTransDep (\p1 _ p3 -> repoStateWithPackageVersions2 p1 p3)
-         it "a state is not valid if it contains conflicting packages" $
-            propStateInvalid2 makeConflict repoStateWithPackageVersions2
-         it "a state is not valid if it contains a wildcard conflict" $
-            propStateInvalid2 makeWildConflict repoStateWithPackageVersions2
+         context "with conflicts" $ do
+                 it "A~B=x, [A, B=x]" $
+                    propStateInvalid2 makeConflict repoStateWithPackageVersions2
+                 it "A~B, [A, B]" $
+                    propStateInvalid2 makeWildConflict repoStateWithPackageVersions2
       where checkRepoWithState p rg stateGen =
                 forAll (gen2 (execRepoGen rg, stateGen)) p
             checkStateValid   = checkRepoWithState (uncurry validState)
