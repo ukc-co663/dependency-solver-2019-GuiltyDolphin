@@ -65,25 +65,30 @@ mkExampleRepoState = fromJust . P.parseRepoState . mkRepoStateString
 
 
 repoExamples :: [RepoExample]
-repoExamples = fmap (uncurry RepoExample)
+repoExamples = fmap ((\(r, rs) -> RepoExample (mkExampleRepo r) (fmap mkExampleRepoState rs)))
                [ repoExample1
                , repoExample2
                , repoExample3 ]
-    where repoExample1 = ( mkExampleRepo [("A", "1.7", [], [])]
-                         , [mkExampleRepoState [("A", "1.7")]] )
-          repoExample2 = ( mkExampleRepo [ ("A", "1.7", [["B=2"]], [])
-                                         , ("B", "2", [], []) ]
-                         , fmap mkExampleRepoState [ [("A", "1.7"), ("B", "2")]
-                                                   , [("B", "2")] ] )
-          repoExample3 = ( mkExampleRepo [ ("A", "1", [["B=2"], ["C=3"]], [])
-                                         , ("B", "2", [], [])
-                                         , ("C", "3", [], []) ]
-                         , fmap mkExampleRepoState [ [("A", "1"), ("B", "2"), ("C", "3")]
-                                                   , [("A", "1"), ("B", "2")]
-                                                   , [("A", "1"), ("C", "3")]
-                                                   , [("B", "2"), ("C", "3")]
-                                                   , [("B", "2")]
-                                                   , [("C", "3")] ] )
+    where repoExample1 =
+              ( [("A", "1.7", [], [])]
+              , [[("A", "1.7")]] )
+          repoExample2 =
+              ( [ ("A", "1.7", [["B=2"]], [])
+                , ("B", "2", [], [])
+                ]
+              , [ [("A", "1.7"), ("B", "2")]
+                , [("B", "2")] ] )
+          repoExample3 =
+              ( [ ("A", "1", [["B=2"], ["C=3"]], [])
+                , ("B", "2", [], [])
+                , ("C", "3", [], [])
+                ]
+              , [ [("A", "1"), ("B", "2"), ("C", "3")]
+                , [("A", "1"), ("B", "2")]
+                , [("A", "1"), ("C", "3")]
+                , [("B", "2"), ("C", "3")]
+                , [("B", "2")]
+                , [("C", "3")] ] )
 
 
 mkPackageString :: String -> String -> String
