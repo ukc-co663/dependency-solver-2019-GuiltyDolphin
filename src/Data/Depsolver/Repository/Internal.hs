@@ -78,6 +78,11 @@ getPackage :: Repository -> PackageVersion -> Maybe PackageDesc
 getPackage r pv = find (\p -> pv == toPackageVersion p) (repoPackages r)
 
 
+getPackageAnyVersion :: Repository -> PackageName -> Maybe [PackageDesc]
+getPackageAnyVersion r pn = let matching = filter ((==pn) . packageName) (repoPackages r)
+                            in if null matching then Nothing else Just matching
+
+
 -- | The list of installed packages (and their versions).
 newtype RepoState = RepoState {
       -- ^ Packages and their installed version.
@@ -111,13 +116,15 @@ validState r rs = all meetsPackageDependencies . repoStatePackageVersions $ rs
               maybe False (\p -> meetsADependency (packageDependencies p)
                                  && meetsNoConflicts (packageConflicts p)) (getPackage r pv)
           stateMeetsDependency [vm] =
-            maybe False stateHasPackage $ repoProvidesMatchingPackage vm
+            maybe False stateHasAnyOf $ packagesThatSatisfy vm
           stateMeetsDependency _ = False
           stateMeetsConflict vm =
-              maybe False stateHasPackage $ repoProvidesMatchingPackage vm
-          repoProvidesMatchingPackage (VersionMatch pname _ version) =
-              getPackage r (mkPackageVersion pname version)
-          repoProvidesMatchingPackage _ = Nothing
+              maybe False stateHasAnyOf $ packagesThatSatisfy vm
+          packagesThatSatisfy (VersionMatch pname _ version) =
+              fmap (:[]) $ getPackage r (mkPackageVersion pname version)
+          packagesThatSatisfy (VersionMatchWild pname) =
+              getPackageAnyVersion r pname
+          stateHasAnyOf = any stateHasPackage
           stateHasPackage pv = (toPackageVersion pv) `elem` (repoStatePackageVersions rs)
           meetsADependency [] = True
           meetsADependency deps = any stateMeetsDependency deps

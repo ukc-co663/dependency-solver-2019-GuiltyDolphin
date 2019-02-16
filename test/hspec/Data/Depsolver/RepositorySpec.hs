@@ -57,3 +57,6 @@ spec = do
          it "a state is not valid if it contains conflicting packages" $
             property (\(p1, p2) -> forAll (gen2 (repoWithConflict p1 p2, repoStateWithPackageVersions [p1, p2]))
                       (\(repo, repoState) -> not (validState repo repoState)))
+         it "a state is not valid if it contains a wildcard conflict" $
+            property (\(p1, p2) -> forAll (gen2 (repoWithWildConflict p1 p2, repoStateWithPackageVersions [p1, p2]))
+                      (\(repo, repoState) -> not (validState repo repoState)))

@@ -8,6 +8,7 @@ module TestHelper
     , repoWithoutPackageVersion
     , repoWithDependency
     , repoWithConflict
+    , repoWithWildConflict
     , repoStateWithPackage
     , repoStateWithPackageVersion
     , repoStateWithPackageVersions
@@ -68,27 +69,47 @@ repoExamples :: [RepoExample]
 repoExamples = fmap ((\(r, rs) -> RepoExample (mkExampleRepo r) (fmap mkExampleRepoState rs)))
                [ repoExample1
                , repoExample2
-               , repoExample3 ]
-    where repoExample1 =
-              ( [("A", "1.7", [], [])]
-              , [[("A", "1.7")]] )
+               , repoExample3
+               , repoExample4
+               , repoExample5
+               ]
+    where a1 = ("A", "1")
+          b2 = ("B", "2")
+          b3 = ("B", "3")
+          c3 = ("C", "3")
+          b2p = ("B", "2", [], [])
+          b3p = ("B", "3", [], [])
+          c3p = ("C", "3", [], [])
+          repoExample1 =
+              ( [("A", "1", [], [])]
+              , [[a1]] )
           repoExample2 =
-              ( [ ("A", "1.7", [["B=2"]], [])
-                , ("B", "2", [], [])
-                ]
-              , [ [("A", "1.7"), ("B", "2")]
-                , [("B", "2")] ] )
+              ( [ ("A", "1", [["B=2"]], []), b2p ]
+              , [ [a1, b2]
+                , [b2] ] )
           repoExample3 =
-              ( [ ("A", "1", [["B=2"], ["C=3"]], [])
-                , ("B", "2", [], [])
-                , ("C", "3", [], [])
-                ]
-              , [ [("A", "1"), ("B", "2"), ("C", "3")]
-                , [("A", "1"), ("B", "2")]
-                , [("A", "1"), ("C", "3")]
-                , [("B", "2"), ("C", "3")]
-                , [("B", "2")]
-                , [("C", "3")] ] )
+              ( [ ("A", "1", [["B=2"], ["C=3"]], []), b2p, c3p ]
+              , [ [a1, b2, c3]
+                , [a1, b2]
+                , [a1, c3]
+                , [b2, c3]
+                , [b2]
+                , [c3] ] )
+          repoExample4 =
+              ( [ ("A", "1", [["B=2"]], []), b2p, b3p ]
+              , [ [a1, b2, b3]
+                , [a1, b2]
+                , [b2, b3]
+                , [b2]
+                , [b3] ] )
+          repoExample5 =
+              ( [ ("A", "1", [["B"]], []), b2p, b3p ]
+              , [ [a1, b2, b3]
+                , [a1, b2]
+                , [a1, b3]
+                , [b2, b3]
+                , [b2]
+                , [b3] ] )
 
 
 mkPackageString :: String -> String -> String
@@ -181,6 +202,16 @@ repoWithDependency (RI.PackageVersion (p1name, p1version)) p2 =
 repoWithConflict :: RI.PackageVersion -> RI.PackageVersion -> Gen RI.Repository
 repoWithConflict (RI.PackageVersion (p1name, p1version)) (RI.PackageVersion (p2name, p2version)) =
     let dep = RI.mkDependency p2name RI.VEQ p2version
+        p1 = RI.mkPackage p1name p1version [] [dep]
+        p2 = RI.mkPackage p2name p2version [] []
+    in repoWithPackages [p1, p2]
+
+
+-- | Generate a repository that is guaranteed to contain
+-- | a wildcard conflict between the first and second packages.
+repoWithWildConflict :: RI.PackageVersion -> RI.PackageVersion -> Gen RI.Repository
+repoWithWildConflict (RI.PackageVersion (p1name, p1version)) (RI.PackageVersion (p2name, p2version)) =
+    let dep = RI.mkWildcardDependency p2name
         p1 = RI.mkPackage p1name p1version [] [dep]
         p2 = RI.mkPackage p2name p2version [] []
     in repoWithPackages [p1, p2]
