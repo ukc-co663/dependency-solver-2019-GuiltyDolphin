@@ -26,6 +26,9 @@ library:
   source-dirs: src
   dependencies:
   - json
+  ghc-options:
+  - -Werror
+  - -Wall
 
 executables:
   depsolver-exe:
@@ -35,6 +38,8 @@ executables:
     - -threaded
     - -rtsopts
     - -with-rtsopts=-N
+    - -Werror
+    - -Wall
     dependencies:
     - depsolver
 
@@ -46,6 +51,9 @@ tests:
     - -threaded
     - -rtsopts
     - -with-rtsopts=-N
+    - -Werror
+    - -Wall
+    - -fno-warn-orphans
     dependencies:
     - depsolver
     - hspec
