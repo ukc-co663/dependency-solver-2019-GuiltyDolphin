@@ -18,6 +18,7 @@ module Data.Depsolver.Repository.Internal
     , mkPackage
     , PackageName(..)
     , mkPackageName
+    , toPackageVersion
 
     -- ** Dependencies
     , VersionMatch(..)

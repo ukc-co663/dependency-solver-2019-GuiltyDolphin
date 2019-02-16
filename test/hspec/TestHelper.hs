@@ -1,14 +1,18 @@
 {-# LANGUAGE StandaloneDeriving #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
+{-# LANGUAGE FlexibleContexts #-}
 module TestHelper
     ( module Test.Hspec
     , module Test.QuickCheck
     , gen2
-    , repoWithoutPackage
-    , repoWithoutPackageVersion
-    , repoWithDependency
-    , repoWithConflict
-    , repoWithWildConflict
+    , RepoGen
+    , execRepoGen
+    , runRepoGen
+    , makeDependency
+    , makeConflict
+    , makeWildConflict
+    , withoutPackage
+    , withoutPackageName
     , repoStateWithPackage
     , repoStateWithPackageVersion
     , repoStateWithPackageVersions
@@ -26,7 +30,8 @@ import Test.Hspec
 import Test.QuickCheck
 
 import Control.Monad.IO.Class (MonadIO, liftIO)
-import Data.List (foldl', intersperse)
+import Control.Monad.State (State, execState, get, modify, runState)
+import Data.List (find, foldl', intersperse)
 import Data.Maybe (fromJust)
 import System.FilePath ((</>))
 
@@ -155,66 +160,78 @@ gen2 (g1, g2) = do
   pure (x, y)
 
 
+type RepoGen = State RI.Repository
+
+
+runRepoGen :: (Arbitrary a) => RepoGen a -> Gen (RI.Repository, a)
+runRepoGen rg = fmap ((\(x,y) -> (y,x)) . runState rg) arbitrary
+
+
+execRepoGen :: RepoGen a -> Gen RI.Repository
+execRepoGen rg = fmap (execState rg) arbitrary
+
+
 deriving instance Arbitrary RI.Repository
 
 
-deleteRepoPackagesBy :: (RI.PackageDesc -> Bool) -> RI.Repository -> RI.Repository
-deleteRepoPackagesBy p = RI.mkRepository . filter p . RI.repoPackages
+removePackagesBy :: (RI.PackageDesc -> Bool) -> RepoGen ()
+removePackagesBy p = modifyPackages (filter (not . p))
 
 
--- | Generate a repository that is guaranteed not to contain
--- | the given package name.
-repoWithoutPackage :: RI.PackageName -> Gen RI.Repository
-repoWithoutPackage pname = deleteRepoPackageByName pname <$> arbitrary
-    where deleteRepoPackageByName n = deleteRepoPackagesBy ((/=n) . RI.packageName)
+withoutPackageName :: RI.PackageName -> RepoGen ()
+withoutPackageName name = removePackagesBy ((==name) . RI.packageName)
 
 
--- | Generate a repository that is guaranteed not to contain
--- | the given package with the specified version.
-repoWithoutPackageVersion :: RI.PackageVersion -> Gen RI.Repository
-repoWithoutPackageVersion (RI.PackageVersion (pname, version)) =
-    deleteRepoPackageByNameVersion <$> arbitrary
-    where deleteRepoPackageByNameVersion =
-              RI.mkRepository . filter notPV . RI.repoPackages
-          notPV p = RI.packageName p /= pname && RI.packageVersion p /= version
+withoutPackage :: RI.PackageVersion -> RepoGen ()
+withoutPackage pv = removePackagesBy ((==pv) . RI.toPackageVersion)
 
 
--- | Generate a repository that is guaranteed to contain the
--- | given packages.
-repoWithPackages :: [RI.PackageDesc] -> Gen RI.Repository
-repoWithPackages ps = do
-  repo <- arbitrary
-  pure $ foldl' addPackage repo ps
-  where addPackage repo p = RI.mkRepository . (p:) $ RI.repoPackages repo
+lookupOrNew :: RI.PackageVersion -> RepoGen RI.PackageDesc
+lookupOrNew pv = do
+  repo <- get
+  case find ((==pv) . RI.toPackageVersion) (RI.repoPackages repo) of
+    Just p -> pure p
+    Nothing -> let (RI.PackageVersion (pname, pversion)) = pv
+                   p = RI.mkPackage pname pversion [] []
+               in putPackage p >> pure p
 
 
--- | Generate a repository that is guaranteed to contain
--- | a dependency between the first and second packages.
-repoWithDependency :: RI.PackageVersion -> RI.PackageDesc -> Gen RI.Repository
-repoWithDependency (RI.PackageVersion (p1name, p1version)) p2 =
-    let dep = RI.mkDependency (RI.packageName p2) RI.VEQ (RI.packageVersion p2)
-        p1 = RI.mkPackage p1name p1version [[dep]] []
-    in repoWithPackages [p1, p2]
+modifyPackages :: ([RI.PackageDesc] -> [RI.PackageDesc]) -> RepoGen ()
+modifyPackages f = modify (RI.mkRepository . f . RI.repoPackages)
 
 
--- | Generate a repository that is guaranteed to contain
--- | a conflict between the first and second packages.
-repoWithConflict :: RI.PackageVersion -> RI.PackageVersion -> Gen RI.Repository
-repoWithConflict (RI.PackageVersion (p1name, p1version)) (RI.PackageVersion (p2name, p2version)) =
+putPackage :: RI.PackageDesc -> RepoGen ()
+putPackage p =
+    modifyPackages insertPackageUniquely
+    where insertPackageUniquely = (p:) . filter ((not . equalPV p))
+          equalPV p1 p2 = RI.toPackageVersion p1 == RI.toPackageVersion p2
+
+
+makeConflict :: RI.PackageVersion -> RI.PackageVersion -> RepoGen ()
+makeConflict p1pv (RI.PackageVersion (p2name, p2version)) = do
+    p1 <- lookupOrNew p1pv
     let dep = RI.mkDependency p2name RI.VEQ p2version
-        p1 = RI.mkPackage p1name p1version [] [dep]
-        p2 = RI.mkPackage p2name p2version [] []
-    in repoWithPackages [p1, p2]
+        p1' = RI.mkPackage (RI.packageName p1) (RI.packageVersion p1)
+              (RI.packageDependencies p1) (dep : RI.packageConflicts p1)
+    putPackage p1'
 
 
--- | Generate a repository that is guaranteed to contain
--- | a wildcard conflict between the first and second packages.
-repoWithWildConflict :: RI.PackageVersion -> RI.PackageVersion -> Gen RI.Repository
-repoWithWildConflict (RI.PackageVersion (p1name, p1version)) (RI.PackageVersion (p2name, p2version)) =
+makeWildConflict :: RI.PackageVersion -> RI.PackageVersion -> RepoGen ()
+makeWildConflict p1pv (RI.PackageVersion (p2name, _)) = do
+    p1 <- lookupOrNew p1pv
     let dep = RI.mkWildcardDependency p2name
-        p1 = RI.mkPackage p1name p1version [] [dep]
-        p2 = RI.mkPackage p2name p2version [] []
-    in repoWithPackages [p1, p2]
+        p1' = RI.mkPackage (RI.packageName p1) (RI.packageVersion p1)
+              (RI.packageDependencies p1) (dep : RI.packageConflicts p1)
+    putPackage p1'
+
+
+makeDependency :: RI.PackageVersion -> RI.PackageVersion -> RepoGen ()
+makeDependency p1pv (RI.PackageVersion (p2name, p2version)) = do
+    p1 <- lookupOrNew p1pv
+    let dep = RI.mkDependency p2name RI.VEQ p2version
+        p1' = RI.mkPackage (RI.packageName p1) (RI.packageVersion p1)
+              ([dep] : RI.packageDependencies p1) (RI.packageConflicts p1)
+    putPackage p1'
 
 
 instance Arbitrary RI.PackageDesc where

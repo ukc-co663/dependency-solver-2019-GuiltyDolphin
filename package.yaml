@@ -60,3 +60,4 @@ tests:
     - QuickCheck
     - filemanip
     - filepath
+    - mtl
