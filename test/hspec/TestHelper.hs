@@ -7,8 +7,10 @@ module TestHelper
     , repoWithoutPackage
     , repoWithoutPackageVersion
     , repoWithDependency
+    , repoWithConflict
     , repoStateWithPackage
     , repoStateWithPackageVersion
+    , repoStateWithPackageVersions
     , mkPackageString
     , mkPackageStringFull
     , mkRepoString
@@ -131,6 +133,15 @@ repoWithoutPackageVersion (RI.PackageVersion (pname, version)) =
           notPV p = RI.packageName p /= pname && RI.packageVersion p /= version
 
 
+-- | Generate a repository that is guaranteed to contain the
+-- | given packages.
+repoWithPackages :: [RI.PackageDesc] -> Gen RI.Repository
+repoWithPackages ps = do
+  repo <- arbitrary
+  pure $ foldl' addPackage repo ps
+  where addPackage repo p = RI.mkRepository . (p:) $ RI.repoPackages repo
+
+
 -- | Generate a repository that is guaranteed to contain
 -- | a dependency between the first and second packages.
 repoWithDependency :: RI.PackageVersion -> RI.PackageDesc -> Gen RI.Repository
@@ -138,10 +149,16 @@ repoWithDependency (RI.PackageVersion (p1name, p1version)) p2 =
     let dep = RI.mkDependency (RI.packageName p2) RI.VEQ (RI.packageVersion p2)
         p1 = RI.mkPackage p1name p1version [[dep]] []
     in repoWithPackages [p1, p2]
-    where repoWithPackages ps = do
-            repo <- arbitrary
-            pure $ foldl' addPackage repo ps
-          addPackage repo p = RI.mkRepository . (p:) $ RI.repoPackages repo
+
+
+-- | Generate a repository that is guaranteed to contain
+-- | a conflict between the first and second packages.
+repoWithConflict :: RI.PackageVersion -> RI.PackageVersion -> Gen RI.Repository
+repoWithConflict (RI.PackageVersion (p1name, p1version)) (RI.PackageVersion (p2name, p2version)) =
+    let dep = RI.mkDependency p2name RI.VEQ p2version
+        p1 = RI.mkPackage p1name p1version [] [dep]
+        p2 = RI.mkPackage p2name p2version [] []
+    in repoWithPackages [p1, p2]
 
 
 instance Arbitrary RI.PackageDesc where
@@ -177,10 +194,17 @@ repoStateWithPackage pname = do
 -- | Generate a repository state that is guaranteed to have
 -- | an entry for the given package.
 repoStateWithPackageVersion :: RI.PackageVersion -> Gen RI.RepoState
-repoStateWithPackageVersion p = do
-  fmap (addRepoStatePackage p) arbitrary
-    where addRepoStatePackage pv =
-              RI.mkRepoState . (pv:) . RI.repoStatePackageVersions
+repoStateWithPackageVersion p = repoStateWithPackageVersions [p]
+
+
+-- | Generate a repository state that is guaranteed to have
+-- | an entry for each of the given package versions.
+repoStateWithPackageVersions :: [RI.PackageVersion] -> Gen RI.RepoState
+repoStateWithPackageVersions pvs = do
+  repoState <- arbitrary
+  pure $ foldl' addRepoStatePackage repoState pvs
+    where addRepoStatePackage rs pv =
+              RI.mkRepoState . (pv:) . RI.repoStatePackageVersions $ rs
 
 
 deriving instance Arbitrary RI.PackageVersion

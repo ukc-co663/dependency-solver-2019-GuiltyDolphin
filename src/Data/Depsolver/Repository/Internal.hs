@@ -108,16 +108,20 @@ emptyRepoState = RepoState []
 validState :: Repository -> RepoState -> Bool
 validState r rs = all meetsPackageDependencies . repoStatePackageVersions $ rs
     where meetsPackageDependencies pv =
-              maybe False (meetsADependency . packageDependencies) (getPackage r pv)
+              maybe False (\p -> meetsADependency (packageDependencies p)
+                                 && meetsNoConflicts (packageConflicts p)) (getPackage r pv)
           stateMeetsDependency [vm] =
             maybe False stateHasPackage $ repoProvidesMatchingPackage vm
           stateMeetsDependency _ = False
+          stateMeetsConflict vm =
+              maybe False stateHasPackage $ repoProvidesMatchingPackage vm
           repoProvidesMatchingPackage (VersionMatch pname _ version) =
               getPackage r (mkPackageVersion pname version)
           repoProvidesMatchingPackage _ = Nothing
           stateHasPackage pv = (toPackageVersion pv) `elem` (repoStatePackageVersions rs)
           meetsADependency [] = True
           meetsADependency deps = any stateMeetsDependency deps
+          meetsNoConflicts = not . any stateMeetsConflict
 
 
 newtype PackageName = PackageName { getPackageName :: String }
