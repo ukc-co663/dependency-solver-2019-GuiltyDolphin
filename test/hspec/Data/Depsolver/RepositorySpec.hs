@@ -16,6 +16,8 @@ import Data.Depsolver.Repository
     , toVersionList
     )
 
+import qualified Data.Depsolver.Repository as R
+
 
 spec :: Spec
 spec = do
@@ -88,18 +90,24 @@ spec = do
                          state <- stateGen repo
                          pure (repo, state)) p
 
-            checkStateValid   = checkRepoWithState (uncurry validState)
-            propStateValid rg stateGen = property $ \p -> checkStateValid (rg p) (stateGen p)
+            propChecker pf rg stateGen =
+                property $ \p -> (checkRepoWithState pf) (rg p) (stateGen p)
 
-            checkStateInvalid = checkRepoWithState (not . uncurry validState)
-            propStateInvalid rg stateGen = property $ \p -> checkStateInvalid (rg p) (stateGen p)
+            propChecker' pf rg stateGen =
+                property $ \p -> (checkRepoWithState' pf) (rg p) (\r -> stateGen r p)
 
-            checkStateInvalid' = checkRepoWithState' (not . uncurry validState)
-            propStateInvalid' rg stateGen =
-                property $ \p -> checkStateInvalid' (rg p) (\r -> stateGen r p)
+            validState'   = uncurry validState
+            notValidState = not . validState'
 
-            repoStateWithPackageVersions1 p1 = pure $ repoStateWithPackageVersions [p1]
-            repoStateWithPackageVersions2 (p1, p2) = pure $ repoStateWithPackageVersions [p1, p2]
+            propStateValid, propStateInvalid :: (Arbitrary a, Show a) => (a -> RepoGen b) -> (a -> Gen R.RepoState) -> Property
+            propStateValid    = propChecker  validState'
+            propStateInvalid  = propChecker  notValidState
+            propStateValid', propStateInvalid' :: (Arbitrary a, Show a) => (a -> RepoGen b) -> (R.Repository -> a -> Gen R.RepoState) -> Property
+            propStateValid'   = propChecker' validState'
+            propStateInvalid' = propChecker' notValidState
+
+            repoStateWithPackageVersions1  p1          = pure $ repoStateWithPackageVersions [p1]
+            repoStateWithPackageVersions2 (p1, p2)     = pure $ repoStateWithPackageVersions [p1, p2]
             repoStateWithPackageVersions3 (p1, p2, p3) = pure $ repoStateWithPackageVersions [p1, p2, p3]
 
             makeConflict1 (p1, p2) = makeConflict p1 p2
