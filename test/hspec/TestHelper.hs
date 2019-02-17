@@ -154,6 +154,14 @@ mkRepoStateString :: [(String, String)] -> String
 mkRepoStateString = jarryStr . fmap (\(p, v) -> concat ["\"", p, "=", v, "\""])
 
 
+class ArbyRepo a where
+    arby :: [(RI.PackageVersion)] -> Gen a
+
+
+instance ArbyRepo a => ArbyRepo [a] where
+    arby pvs = listOf (arby pvs)
+
+
 gen2 :: (Gen a, Gen b) -> Gen (a, b)
 gen2 (g1, g2) = do
   x <- g1
@@ -172,7 +180,14 @@ execRepoGen :: RepoGen a -> Gen RI.Repository
 execRepoGen rg = fmap (execState rg) arbitrary
 
 
-deriving instance Arbitrary RI.Repository
+instance Arbitrary RI.Repository where
+    arbitrary = do
+      pvs <- arbitrary
+      fmap RI.mkRepository $ mapM (arbyPackage pvs) pvs
+      where arbyPackage pvs (RI.PackageVersion (pname, pversion)) = do
+                                   deps <- arby pvs
+                                   conflicts <- arby pvs
+                                   pure $ RI.mkPackage pname pversion deps conflicts
 
 
 removePackagesBy :: (RI.PackageDesc -> Bool) -> RepoGen ()
@@ -266,6 +281,11 @@ instance Arbitrary RI.PackageName where
         where pnameChar = '.' : '-' : ['a'..'z'] <> ['A'..'Z'] <> ['0'..'9']
 
 
+instance ArbyRepo RI.PackageName where
+    arby = elements . fmap pvName
+        where pvName = fst . RI.getPackageVersion
+
+
 deriving instance Arbitrary RI.RepoState
 
 
@@ -303,6 +323,11 @@ instance Arbitrary RI.Version where
               verDigit = elements ['0'..'9']
 
 
+instance ArbyRepo RI.Version where
+    arby = elements . fmap pvVersion
+        where pvVersion = snd . RI.getPackageVersion
+
+
 instance Arbitrary RI.VersionMatch where
     arbitrary = do
       name <- arbitrary
@@ -311,6 +336,16 @@ instance Arbitrary RI.VersionMatch where
                         version <- arbitrary
                         pure $ RI.VersionMatch name compType version)
                    , (3, pure $ RI.VersionMatchWild name) ]
+
+
+instance ArbyRepo RI.VersionMatch where
+    arby pvs = do
+      name <- arby pvs
+      frequency [ (7, do
+                     compType <- arbitrary
+                     version <- frequency [(7, arby pvs), (3, arbitrary)]
+                     pure $ RI.VersionMatch name compType version)
+                , (3, pure $ RI.VersionMatchWild name) ]
 
 
 instance Arbitrary RI.VersionCmp where
