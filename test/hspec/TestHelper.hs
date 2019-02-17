@@ -31,7 +31,7 @@ import Test.Hspec
 import Test.QuickCheck
 
 import Control.Monad.IO.Class (MonadIO, liftIO)
-import Control.Monad.State (State, execState, get, modify, runState)
+import Control.Monad.State (State, get, modify, runState)
 import Data.List (find, foldl', intersperse)
 import Data.Maybe (fromJust)
 import System.FilePath ((</>))
@@ -172,12 +172,12 @@ gen2 (g1, g2) = do
 type RepoGen = State RI.Repository
 
 
-runRepoGen :: (Arbitrary a) => RepoGen a -> Gen (RI.Repository, a)
-runRepoGen rg = fmap ((\(x,y) -> (y,x)) . runState rg) arbitrary
+runRepoGen :: RepoGen a -> (RI.Repository, a)
+runRepoGen rg = ((\(x,y) -> (y,x)) . runState rg) RI.emptyRepository
 
 
-execRepoGen :: RepoGen a -> Gen RI.Repository
-execRepoGen rg = fmap (execState rg) arbitrary
+execRepoGen :: RepoGen a -> RI.Repository
+execRepoGen = fst . runRepoGen
 
 
 instance Arbitrary RI.Repository where

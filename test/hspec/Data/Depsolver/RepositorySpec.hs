@@ -83,10 +83,11 @@ spec = do
                     propStateInvalid' (\p -> makeConflict p p)
                                          (\r p -> repoStateContaining r [p])
       where checkRepoWithState p rg stateGen =
-                forAll (gen2 (execRepoGen rg, stateGen)) p
+                forAll (gen2 (pure $ execRepoGen rg, stateGen)) p
+
             checkRepoWithState' p rg stateGen =
                 forAll (do
-                         repo <- execRepoGen rg
+                         let repo = execRepoGen rg
                          state <- stateGen repo
                          pure (repo, state)) p
 
