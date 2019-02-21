@@ -14,6 +14,7 @@ module TestHelper
     , genNewPackage
     , genNewPackageWithVersion
     , makeDependency
+    , makeDependencies
     , makeConflictOp
     , makeConflict
     , makeWildConflict
@@ -298,14 +299,18 @@ makeWildConflict p1pv p2pv = do
     putPackage p1'
 
 
-makeDependency :: RI.PackageVersion -> [RI.PackageVersion] -> RepoGen ()
-makeDependency p1pv p2pvs = do
+makeDependencies :: RI.PackageVersion -> [[RI.PackageVersion]] -> RepoGen ()
+makeDependencies p1pv p2pvs = do
     p1 <- lookupOrNew p1pv
-    targets <- mapM lookupOrNew p2pvs
-    let deps = fmap (\target -> RI.mkDependency (RI.packageName target) RI.VEQ (RI.packageVersion target)) targets
+    targets <- mapM (mapM lookupOrNew) p2pvs
+    let deps = fmap (fmap (\target -> RI.mkDependency (RI.packageName target) RI.VEQ (RI.packageVersion target))) targets
         p1' = RI.mkPackage (RI.packageName p1) (RI.packageVersion p1)
-              (deps : RI.packageDependencies p1) (RI.packageConflicts p1)
+              (deps ++ RI.packageDependencies p1) (RI.packageConflicts p1)
     putPackage p1'
+
+
+makeDependency :: RI.PackageVersion -> [RI.PackageVersion] -> RepoGen ()
+makeDependency p1pv p2pvs = makeDependencies p1pv [p2pvs]
 
 
 -- | Generate a new version satisfying the given predicate.
