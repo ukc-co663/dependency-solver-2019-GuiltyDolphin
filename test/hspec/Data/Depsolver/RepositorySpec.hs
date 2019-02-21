@@ -35,6 +35,27 @@ versionTest s cmp vstrs =
     where vtest v1 v2 = it (unwords [show v1, s, show v2]) $ (v1, v2) `shouldSatisfy` uncurry cmp
 
 
+{-
+  Some notes on test notation:
+
+  * A~B means that A conflicts with B
+  * A>>B means that A depends upon B
+  * A>>[B,C], A>>[D] means that A depends on having either B and C, or on D
+  * A~[B, C] means that A conflicts with both B and C
+  * A~B=y means that A conflicts with B of a specific version (y)
+
+  Thus the following tests read:
+
+  * "A~B=x, y!x, [A, B=y]"
+    * A conflicts with B of version x
+    * y is not equal to x
+    * our final state has A, and B of version y
+  * "A~B, [!(A^B)]"
+    * A depends on any version of B
+    * our final state does not have both A and B
+-}
+
+
 spec :: Spec
 spec = do
   describe "version comparison" $ do
