@@ -6,6 +6,7 @@
 module TestHelper
     ( module Test.Hspec
     , module Test.QuickCheck
+    , module Control.Monad.State
     , gen2
     , RepoGen
     , execRepoGen
@@ -17,16 +18,11 @@ module TestHelper
     , makeConflict
     , makeWildConflict
     , versionSat
-    , newPackage
-    , withoutPackage
-    , withoutPackageName
-    , repoStateWithPackage
-    , repoStateWithPackageVersions
-    , repoStateContaining
+    , deletePackage
+    , repoStateWithPackages
     , stateElem
     , arbyState
     , mkPackageString
-    , mkPackageStringFull
     , mkRepoString
     , mkRepoStringFromSpecs
     , repoExamples
@@ -211,16 +207,16 @@ instance Arbitrary RI.Repository where
                                    pure $ RI.mkPackage pname pversion deps conflicts
 
 
+getPackageVersions :: RepoGen [RI.PackageVersion]
+getPackageVersions = fmap (fmap RI.toPackageVersion . RI.repoPackages) get
+
+
 removePackagesBy :: (RI.PackageDesc -> Bool) -> RepoGen ()
 removePackagesBy p = modifyPackages (filter (not . p))
 
 
-withoutPackageName :: RI.PackageName -> RepoGen ()
-withoutPackageName name = removePackagesBy ((==name) . RI.packageName)
-
-
-withoutPackage :: RI.PackageVersion -> RepoGen ()
-withoutPackage pv = removePackagesBy ((==pv) . RI.toPackageVersion)
+deletePackage :: RI.PackageVersion -> RepoGen ()
+deletePackage pv = removePackagesBy ((==pv) . RI.toPackageVersion)
 
 
 lookupOrNew :: RI.PackageVersion -> RepoGen RI.PackageDesc
@@ -251,7 +247,8 @@ newPackage (RI.PackageVersion (pname, pversion)) =
 -- | conflicts or dependencies.
 genNewPackage :: RepoGen RI.PackageVersion
 genNewPackage = do
-  pv <- liftGen arbitrary
+  pvs <- getPackageVersions
+  pv <- liftGen (arbitrary `suchThat` (`notElem` pvs))
   newPackage pv
   pure pv
 
@@ -261,7 +258,8 @@ genNewPackage = do
 -- | have no conflicts or dependencies.
 genNewPackageWithVersion :: RI.Version -> RepoGen RI.PackageVersion
 genNewPackageWithVersion v = do
-  name <- liftGen arbitrary
+  pvs <- getPackageVersions
+  name <- liftGen (arbitrary `suchThat` (\n -> (RI.mkPackageVersion n v) `notElem` pvs))
   let pv = RI.mkPackageVersion name v
   newPackage pv
   pure pv
@@ -344,36 +342,24 @@ instance Arbitrary RI.RepoState where
     shrink = fmap RI.mkRepoState . shrink . RI.repoStatePackageVersions
 
 
--- | Generate a repository state that is guaranteed to have
--- | an entry for the given package.
-repoStateWithPackage :: RI.PackageName -> Gen RI.RepoState
-repoStateWithPackage pname = do
-  version <- arbitrary
-  pure $ repoStateWithPackageVersions [RI.mkPackageVersion pname version]
-
-
 -- | Create a new repository state with the given package versions.
-repoStateWithPackageVersions :: [RI.PackageVersion] -> RI.RepoState
-repoStateWithPackageVersions pvs =
+repoStateWithPackages :: [RI.PackageVersion] -> RI.RepoState
+repoStateWithPackages pvs =
   let repoState = RI.emptyRepoState
   in foldl' addRepoStatePackage repoState pvs
     where addRepoStatePackage rs pv =
-              RI.mkRepoState . (pv:) . RI.repoStatePackageVersions $ rs
+              RI.mkRepoState . nub . (pv:) . RI.repoStatePackageVersions $ rs
 
 
 stateElem :: RI.PackageVersion -> RI.RepoState -> Bool
 stateElem pv = (pv `elem`) . RI.repoStatePackageVersions
 
 
-arbyState :: RI.Repository -> Gen RI.RepoState
-arbyState repo =
+arbyState :: RepoGen RI.RepoState
+arbyState = do
+  repo <- get
   let allowedPackages = fmap RI.toPackageVersion $ RI.repoPackages repo
-  in fmap RI.mkRepoState $ sublistOf allowedPackages
-
-
-repoStateContaining :: RI.Repository -> [RI.PackageVersion] -> Gen RI.RepoState
-repoStateContaining repo pvs =
-  fmap (RI.mkRepoState . nub . (pvs<>) . RI.repoStatePackageVersions) (arbyState repo)
+  liftGen (fmap RI.mkRepoState $ sublistOf allowedPackages)
 
 
 deriving instance Arbitrary RI.PackageVersion
