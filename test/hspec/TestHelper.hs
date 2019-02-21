@@ -36,7 +36,7 @@ import QuickCheck.GenT (liftGen)
 
 import Control.Monad.IO.Class (MonadIO, liftIO)
 import Control.Monad.State (MonadState, State, get, modify, runState, state, lift)
-import Data.List (find, foldl', intersperse)
+import Data.List (find, foldl', intersperse, nub)
 import Data.Maybe (fromJust)
 import System.FilePath ((</>))
 
@@ -301,7 +301,9 @@ instance ArbyRepo RI.PackageName where
         where pvName = fst . RI.getPackageVersion
 
 
-deriving instance Arbitrary RI.RepoState
+instance Arbitrary RI.RepoState where
+    arbitrary = fmap (RI.mkRepoState . nub) arbitrary
+    shrink = fmap RI.mkRepoState . shrink . RI.repoStatePackageVersions
 
 
 -- | Generate a repository state that is guaranteed to have
