@@ -137,6 +137,13 @@ spec = do
                     propStateInvalid genNewConflict repoStateWithPackages2
                  it "A~B, [A, B]" $
                     propStateInvalid genNewWildConflict repoStateWithPackages2
+                 it "A>>B, B~A [anything with A]" $
+                    propStateInvalid (do
+                                     (p1, p2) <- gen2packages
+                                     makeDependency p1 [p2]
+                                     makeConflict p2 p1
+                                     pure p1)
+                                     repoStateWithPackages1
                  it "A>>[B,C] B~C [anything with A]" $
                     propStateInvalid (do
                                       (p1, p2, p3) <- gen3packages
