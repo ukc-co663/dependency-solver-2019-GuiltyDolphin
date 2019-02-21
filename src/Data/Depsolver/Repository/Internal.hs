@@ -39,6 +39,7 @@ module Data.Depsolver.Repository.Internal
 
 
 import Control.Arrow ((&&&))
+import Data.Function (on)
 import Data.List (find, intersperse)
 import Data.Maybe (fromMaybe)
 
@@ -182,7 +183,14 @@ newtype Version = Version {
       -- ^
       -- ^ @toVersionList (mkVersion ["1", "0"]) == ["1", "0"]@
       toVersionList :: [String]
-    } deriving (Eq)
+    }
+
+
+instance Eq Version where
+    (Version v1s) == (Version v2s) =
+        let extendTo n xs = xs ++ replicate (n - length xs) "0"
+            compLen = max (length v1s) (length v2s)
+        in ((==) `on` (fmap (dropWhile (=='0')) . extendTo compLen)) v1s v2s
 
 
 instance Show Version where
