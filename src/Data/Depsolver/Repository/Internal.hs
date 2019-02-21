@@ -40,7 +40,7 @@ module Data.Depsolver.Repository.Internal
 
 import Control.Arrow ((&&&))
 import Data.Function (on)
-import Data.List (find, intersperse)
+import Data.List (dropWhileEnd, find, intersperse)
 import Data.Maybe (fromMaybe)
 
 import qualified Text.JSON as TJ
@@ -178,19 +178,29 @@ mkPackageVersion :: PackageName -> Version -> PackageVersion
 mkPackageVersion = curry PackageVersion
 
 
-newtype Version = Version {
+data Version = Version {
       -- ^ The components of the version as a list.
       -- ^
       -- ^ @toVersionList (mkVersion ["1", "0"]) == ["1", "0"]@
       toVersionList :: [String]
+    , getCanonicalVersionString :: [Integer]
     }
 
 
+-- | Produce the canonical representation of the given version.
+-- |
+-- | - leading zeros are removed (e.g., 10.02 becomes 10.2)
+-- | - trailing zero components are removed (e.g., 10.0 becomes 10)
+canonicalVersionString :: [String] -> [Integer]
+canonicalVersionString = (dropWhileEnd (==0)) . fmap read
+
+
 instance Eq Version where
-    (Version v1s) == (Version v2s) =
-        let extendTo n xs = xs ++ replicate (n - length xs) "0"
-            compLen = max (length v1s) (length v2s)
-        in ((==) `on` (fmap (dropWhile (=='0')) . extendTo compLen)) v1s v2s
+    (==) = (==) `on` getCanonicalVersionString
+
+
+instance Ord Version where
+    (<=) = (<=) `on` getCanonicalVersionString
 
 
 instance Show Version where
@@ -221,7 +231,7 @@ parseVersion vs = Just . mkVersion . splitOnPeriod $ vs
 -- | identifier, e.g., 1.0.0 could be represented as
 -- | @mkVersion ["1", "0", "0"]@.
 mkVersion :: [String] -> Version
-mkVersion = Version
+mkVersion vs = Version vs (canonicalVersionString vs)
 
 
 data PackageDesc = PackageDesc {

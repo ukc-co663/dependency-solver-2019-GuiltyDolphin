@@ -38,6 +38,7 @@ versionTest s cmp vstrs =
 spec :: Spec
 spec = do
   describe "version comparison" $ do
+         versionTest ">" (>) ["10", "2", "1.7.3", "1.2", "1", "0.1", "0"]
          versionTest "=" (==) ["10.2", "10.02", "10.2.0", "10.02.0", "10.02.00", "010.02.00"]
   describe "toVersionList" $ do
          it "is inverse of mkVersion" $
