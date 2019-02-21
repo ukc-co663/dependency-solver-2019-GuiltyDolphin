@@ -58,6 +58,7 @@ tests:
     - depsolver
     - hspec
     - QuickCheck
+    - QuickCheck-GenT
     - filemanip
     - filepath
     - mtl

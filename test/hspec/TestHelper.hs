@@ -1,6 +1,8 @@
 {-# LANGUAGE StandaloneDeriving #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE FlexibleInstances #-}
 module TestHelper
     ( module Test.Hspec
     , module Test.QuickCheck
@@ -29,9 +31,11 @@ module TestHelper
 
 import Test.Hspec
 import Test.QuickCheck
+import qualified QuickCheck.GenT as GenT
+import QuickCheck.GenT (liftGen)
 
 import Control.Monad.IO.Class (MonadIO, liftIO)
-import Control.Monad.State (State, get, modify, runState)
+import Control.Monad.State (MonadState, State, get, modify, runState, state, lift)
 import Data.List (find, foldl', intersperse)
 import Data.Maybe (fromJust)
 import System.FilePath ((</>))
@@ -169,15 +173,26 @@ gen2 (g1, g2) = do
   pure (x, y)
 
 
-type RepoGen = State RI.Repository
+newtype RepoGen a = RepoGen { unRepoGen :: GenT.GenT (State RI.Repository) a }
+    deriving (Functor, Applicative, Monad, GenT.MonadGen)
 
 
-runRepoGen :: RepoGen a -> (RI.Repository, a)
-runRepoGen rg = ((\(x,y) -> (y,x)) . runState rg) RI.emptyRepository
+instance MonadState s (GenT.GenT (State s)) where
+    state = lift . state
 
 
-execRepoGen :: RepoGen a -> RI.Repository
-execRepoGen = fst . runRepoGen
+deriving instance (MonadState RI.Repository RepoGen)
+
+
+runRepoGen :: RepoGen a -> Gen (RI.Repository, a)
+runRepoGen rg = do
+    gens <- GenT.runGenT $ unRepoGen rg
+    let (a, r) = runState gens RI.emptyRepository
+    pure (r, a)
+
+
+execRepoGen :: RepoGen a -> Gen RI.Repository
+execRepoGen = fmap fst . runRepoGen
 
 
 instance Arbitrary RI.Repository where

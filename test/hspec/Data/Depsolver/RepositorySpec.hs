@@ -94,27 +94,40 @@ spec = do
                  it "A~B, [A, B]" $
                     propStateInvalid makeWildConflict1 repoStateWithPackageVersions2
                  it "A>>[B,C] B~C [anything with A]" $
-                    propStateInvalid' (\(p1,p2,p3) -> do
+                    propStateInvalidR (\(p1,p2,p3) -> do
                                          makeDependency p1 [p2, p3]
                                          makeConflict p2 p3)
                                       (\r (p1,_,_) -> repoStateContaining r [p1])
                  it "A~A, [any state with A]" $
-                    propStateInvalid' (\p -> makeConflict p p)
+                    propStateInvalidR (\p -> makeConflict p p)
                                          (\r p -> repoStateContaining r [p])
-      where checkRepoWithState p rg stateGen =
-                forAll (gen2 (pure $ execRepoGen rg, stateGen)) p
-
-            checkRepoWithState' p rg stateGen =
+      where -- | Generate a new (repo, state) pair, where the state
+            -- | generator is allowed to depend upon the repository,
+            -- | as well as the results of the repository generator.
+            checkRepoWithStateRV p rg stateGen =
                 forAll (do
-                         let repo = execRepoGen rg
-                         state <- stateGen repo
+                         (repo, res) <- runRepoGen rg
+                         state <- stateGen repo res
                          pure (repo, state)) p
+
+            -- | Same as 'checkRepoWithStateRV', but for state generators
+            -- | that only depend on the generated repository.
+            checkRepoWithStateR p rg stateGen =
+                checkRepoWithStateRV p rg (\r _ -> stateGen r)
+
+            -- | Same as 'checkRepoWithStateRV', but for standalone
+            -- | state generators.
+            checkRepoWithState p rg stateGen =
+                checkRepoWithStateR p rg (\_ -> stateGen)
 
             propChecker pf rg stateGen =
                 property $ \p -> (checkRepoWithState pf) (rg p) (stateGen p)
 
-            propChecker' pf rg stateGen =
-                property $ \p -> (checkRepoWithState' pf) (rg p) (\r -> stateGen r p)
+            propCheckerR pf rg stateGen =
+                property $ \p -> (checkRepoWithStateR pf) (rg p) (\r -> stateGen r p)
+
+            propCheckerRV pf rg stateGen =
+                property $ \p -> (checkRepoWithStateRV pf) (rg p) (\r v -> stateGen r v p)
 
             validState'   = uncurry validState
             notValidState = not . validState'
@@ -122,9 +135,11 @@ spec = do
             propStateValid, propStateInvalid :: (Arbitrary a, Show a) => (a -> RepoGen b) -> (a -> Gen R.RepoState) -> Property
             propStateValid    = propChecker  validState'
             propStateInvalid  = propChecker  notValidState
-            propStateValid', propStateInvalid' :: (Arbitrary a, Show a) => (a -> RepoGen b) -> (R.Repository -> a -> Gen R.RepoState) -> Property
-            propStateValid'   = propChecker' validState'
-            propStateInvalid' = propChecker' notValidState
+            propStateValidR, propStateInvalidR :: (Arbitrary a, Show a) => (a -> RepoGen b) -> (R.Repository -> a -> Gen R.RepoState) -> Property
+            propStateValidR   = propCheckerR validState'
+            propStateInvalidR = propCheckerR notValidState
+            propStateInvalidRV :: (Arbitrary a, Show a) => (a -> RepoGen b) -> (R.Repository -> b -> a -> Gen R.RepoState) -> Property
+            propStateInvalidRV = propCheckerRV notValidState
 
             repoStateWithPackageVersions1  p1          = pure $ repoStateWithPackageVersions [p1]
             repoStateWithPackageVersions2 (p1, p2)     = pure $ repoStateWithPackageVersions [p1, p2]
