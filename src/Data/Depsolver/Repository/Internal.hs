@@ -80,6 +80,21 @@ getPackage :: Repository -> PackageVersion -> Maybe PackageDesc
 getPackage r pv = find (\p -> pv == toPackageVersion p) (repoPackages r)
 
 
+getPackagesThatSatisfy :: Repository -> VersionMatch -> Maybe [PackageDesc]
+getPackagesThatSatisfy r (VersionMatchWild pname) = getPackageAnyVersion r pname
+getPackagesThatSatisfy r (VersionMatch pname cmp version) = do
+  withSameName <- getPackageAnyVersion r pname
+  pure $ filter satisfiesVersionReq withSameName
+    where satisfiesVersionReq pkg =
+              let cmpop = case cmp of
+                            VLT -> (<)
+                            VGT -> (>)
+                            VEQ -> (==)
+                            VLTE -> (<=)
+                            VGTE -> (>=)
+              in cmpop (packageVersion pkg) version
+
+
 getPackageAnyVersion :: Repository -> PackageName -> Maybe [PackageDesc]
 getPackageAnyVersion r pn = let matching = filter ((==pn) . packageName) (repoPackages r)
                             in if null matching then Nothing else Just matching
@@ -118,14 +133,10 @@ validState r rs = all meetsPackageDependencies . repoStatePackageVersions $ rs
               maybe False (\p -> meetsADependency (packageDependencies p)
                                  && meetsNoConflicts (packageConflicts p)) (getPackage r pv)
           stateMeetsDependency [vm] =
-            maybe False stateHasAnyOf $ packagesThatSatisfy vm
+            maybe False stateHasAnyOf $ getPackagesThatSatisfy r vm
           stateMeetsDependency _ = False
           stateMeetsConflict vm =
-              maybe False stateHasAnyOf $ packagesThatSatisfy vm
-          packagesThatSatisfy (VersionMatch pname _ version) =
-              fmap (:[]) $ getPackage r (mkPackageVersion pname version)
-          packagesThatSatisfy (VersionMatchWild pname) =
-              getPackageAnyVersion r pname
+              maybe False stateHasAnyOf $ getPackagesThatSatisfy r vm
           stateHasAnyOf = any stateHasPackage
           stateHasPackage pv = (toPackageVersion pv) `elem` (repoStatePackageVersions rs)
           meetsADependency [] = True

@@ -30,6 +30,7 @@ module Data.Depsolver.Repository
 
     -- ** Installed Packages
     , PackageVersion
+    , getPackageVersion
     , mkPackageVersion
 
     -- ** Versions

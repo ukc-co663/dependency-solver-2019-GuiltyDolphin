@@ -10,15 +10,21 @@ module TestHelper
     , RepoGen
     , execRepoGen
     , runRepoGen
+    , genNewPackage
+    , genNewPackageWithVersion
     , makeDependency
+    , makeConflictOp
     , makeConflict
     , makeWildConflict
+    , versionSat
     , newPackage
     , withoutPackage
     , withoutPackageName
     , repoStateWithPackage
     , repoStateWithPackageVersions
     , repoStateContaining
+    , stateElem
+    , arbyState
     , mkPackageString
     , mkPackageStringFull
     , mkRepoString
@@ -240,6 +246,27 @@ newPackage (RI.PackageVersion (pname, pversion)) =
     in putPackage p
 
 
+-- | Generate a new package with a unique combination
+-- | of name and version. The package will have no
+-- | conflicts or dependencies.
+genNewPackage :: RepoGen RI.PackageVersion
+genNewPackage = do
+  pv <- liftGen arbitrary
+  newPackage pv
+  pure pv
+
+
+-- | Generate a new package with a unique combination
+-- | of name and (the given) version. The package will
+-- | have no conflicts or dependencies.
+genNewPackageWithVersion :: RI.Version -> RepoGen RI.PackageVersion
+genNewPackageWithVersion v = do
+  name <- liftGen arbitrary
+  let pv = RI.mkPackageVersion name v
+  newPackage pv
+  pure pv
+
+
 putPackage :: RI.PackageDesc -> RepoGen ()
 putPackage p =
     modifyPackages insertPackageUniquely
@@ -247,14 +274,20 @@ putPackage p =
           equalPV p1 p2 = RI.toPackageVersion p1 == RI.toPackageVersion p2
 
 
-makeConflict :: RI.PackageVersion -> RI.PackageVersion -> RepoGen ()
-makeConflict p1pv p2pv = do
+makeConflictOp :: RI.VersionCmp -> RI.PackageVersion -> RI.PackageVersion -> RI.Version -> RepoGen ()
+makeConflictOp op p1pv p2pv v = do
     p1 <- lookupOrNew p1pv
     p2 <- lookupOrNew p2pv
-    let dep = RI.mkDependency (RI.packageName p2) RI.VEQ (RI.packageVersion p2)
+    let dep = RI.mkDependency (RI.packageName p2) op v
         p1' = RI.mkPackage (RI.packageName p1) (RI.packageVersion p1)
               (RI.packageDependencies p1) (dep : RI.packageConflicts p1)
     putPackage p1'
+
+
+makeConflict :: RI.PackageVersion -> RI.PackageVersion -> RepoGen ()
+makeConflict p1pv p2pv = do
+  p2v <- fmap RI.packageVersion $ lookupOrNew p2pv
+  makeConflictOp RI.VEQ p1pv p2pv p2v
 
 
 makeWildConflict :: RI.PackageVersion -> RI.PackageVersion -> RepoGen ()
@@ -275,6 +308,11 @@ makeDependency p1pv p2pvs = do
         p1' = RI.mkPackage (RI.packageName p1) (RI.packageVersion p1)
               (deps : RI.packageDependencies p1) (RI.packageConflicts p1)
     putPackage p1'
+
+
+-- | Generate a new version satisfying the given predicate.
+versionSat :: (RI.Version -> Bool) -> RepoGen RI.Version
+versionSat p = liftGen (arbitrary `suchThat` p)
 
 
 instance Arbitrary RI.PackageDesc where
@@ -323,11 +361,19 @@ repoStateWithPackageVersions pvs =
               RI.mkRepoState . (pv:) . RI.repoStatePackageVersions $ rs
 
 
-repoStateContaining :: RI.Repository -> [RI.PackageVersion] -> Gen RI.RepoState
-repoStateContaining repo pvs = do
+stateElem :: RI.PackageVersion -> RI.RepoState -> Bool
+stateElem pv = (pv `elem`) . RI.repoStatePackageVersions
+
+
+arbyState :: RI.Repository -> Gen RI.RepoState
+arbyState repo =
   let allowedPackages = fmap RI.toPackageVersion $ RI.repoPackages repo
-  arbyPvs <- sublistOf allowedPackages
-  pure $ RI.mkRepoState (pvs <> arbyPvs)
+  in fmap RI.mkRepoState $ sublistOf allowedPackages
+
+
+repoStateContaining :: RI.Repository -> [RI.PackageVersion] -> Gen RI.RepoState
+repoStateContaining repo pvs =
+  fmap (RI.mkRepoState . nub . (pvs<>) . RI.repoStatePackageVersions) (arbyState repo)
 
 
 deriving instance Arbitrary RI.PackageVersion

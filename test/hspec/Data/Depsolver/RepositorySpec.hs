@@ -109,6 +109,14 @@ spec = do
                     propStateInvalid makeTransDep (\(p1,p2,_) -> repoStateWithPackageVersions2 (p1, p2))
                  it "A>>B, B>>C, [A, C]" $
                     propStateInvalid makeTransDep (\(p1,_,p3) -> repoStateWithPackageVersions2 (p1, p3))
+         context "without conflicts" $ do
+                 it "A~B=x, y!=x, [A, B=y]" $
+                    conflictTest propStateValidRV noReq R.VEQ (/=)
+                 it "A~B>x, y<x, [A, B=y]" $
+                    conflictTest propStateValidRV noReq R.VGT (<)
+                 it "A~B, [!(A^B)]" $
+                    propStateValidR makeConflict1 (\r (p1,p2) ->
+                      arbyState r `suchThat` (\s -> not (all (`stateElem`s) [p1,p2])))
          context "with conflicts" $ do
                  it "A~B=x, [A, B=x]" $
                     propStateInvalid makeConflict1 repoStateWithPackageVersions2
@@ -122,6 +130,8 @@ spec = do
                  it "A~A, [any state with A]" $
                     propStateInvalidR (\p -> makeConflict p p)
                                          (\r p -> repoStateContaining r [p])
+                 it "A~B>x, y!=0, y>x, [A, B=y]" $
+                    conflictTest propStateInvalidRV (/=zeroVersion) R.VGT (>)
       where -- | Generate a new (repo, state) pair, where the state
             -- | generator is allowed to depend upon the repository,
             -- | as well as the results of the repository generator.
@@ -159,7 +169,8 @@ spec = do
             propStateValidR, propStateInvalidR :: (Arbitrary a, Show a) => (a -> RepoGen b) -> (R.Repository -> a -> Gen R.RepoState) -> Property
             propStateValidR   = propCheckerR validState'
             propStateInvalidR = propCheckerR notValidState
-            propStateInvalidRV :: (Arbitrary a, Show a) => (a -> RepoGen b) -> (R.Repository -> b -> a -> Gen R.RepoState) -> Property
+            propStateValidRV, propStateInvalidRV :: (Arbitrary a, Show a) => (a -> RepoGen b) -> (R.Repository -> b -> a -> Gen R.RepoState) -> Property
+            propStateValidRV   = propCheckerRV validState'
             propStateInvalidRV = propCheckerRV notValidState
 
             repoStateWithPackageVersions1  p1          = pure $ repoStateWithPackageVersions [p1]
@@ -171,3 +182,24 @@ spec = do
 
             makeDependency1 (p1, p2) = makeDependency p1 [p2]
             makeTransDep (p1, p2, p3) = makeDependency1 (p1, p2) >> makeDependency1 (p2, p3)
+
+            -- | @conflictTest f yreq opCmp op@ generates a test
+            -- | of the form "A~B#x, y@x, [A, B=y]"
+            -- | where '#' is 'opCmp', and '@' is 'op'.
+            -- |
+            -- | @yreq@ is used to constrain the values @y@ can take.
+            -- |
+            -- | For example, @conflictTest _ (/=zeroVersion) VEQ (<) generates
+            -- | "A~B=x, y!=0, y<x, [A, B=y]".
+            conflictTest f yreq opCmp op =
+                f conflictGen (\r (p1, p2y) () -> repoStateContaining r [p1, p2y])
+                where conflictGen () = do
+                            p1 <- genNewPackage
+                            y <- versionSat yreq
+                            p2y <- genNewPackageWithVersion y
+                            x <- versionSat (op . packageIdVersion $ p2y)
+                            makeConflictOp opCmp p1 p2y x
+                            pure (p1, p2y)
+                      packageIdVersion = snd . R.getPackageVersion
+            zeroVersion = mkVersion ["0"]
+            noReq = const True
