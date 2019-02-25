@@ -15,4 +15,7 @@ test:
 clean:
 	$(stack) clean
 
-.PHONY: all build test clean
+ghci:
+	$(stack) ghci
+
+.PHONY: all build test clean ghci
