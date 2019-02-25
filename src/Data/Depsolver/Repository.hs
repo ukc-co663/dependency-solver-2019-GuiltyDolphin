@@ -5,12 +5,8 @@ module Data.Depsolver.Repository
     , mkRepository
     , emptyRepository
     , repoPackages
-
-    -- ** Repository States
-    , RepoState
-    , mkRepoState
-    , emptyRepoState
-    , validState
+    , getPackage
+    , getPackagesThatSatisfy
 
     -- ** Packages
     , PackageDesc
@@ -19,6 +15,7 @@ module Data.Depsolver.Repository
     , packageVersion
     , packageDependencies
     , packageConflicts
+    , packageId
     , PackageName
     , mkPackageName
 

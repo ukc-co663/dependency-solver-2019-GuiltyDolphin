@@ -48,6 +48,7 @@ import System.FilePath.Find ((==?), (&&?), (~~?), always)
 
 import qualified Data.Depsolver.Parse as P
 import qualified Data.Depsolver.Repository.Internal as RI
+import qualified Data.Depsolver.RepoState.Internal as RI
 
 
 fileCaseExamples :: (MonadIO m) => m [(FilePath, (RI.Repository, RI.RepoState))]
