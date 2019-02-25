@@ -1,16 +1,18 @@
+stack=stack
+
 all: build
 
 build: deps
-	stack build
+	$(stack) build
 
 deps:
 	./install_deps.sh
 	touch deps
 
 test:
-	stack test
+	$(stack) test
 
 clean:
-	stack clean
+	$(stack) clean
 
 .PHONY: all build test clean
