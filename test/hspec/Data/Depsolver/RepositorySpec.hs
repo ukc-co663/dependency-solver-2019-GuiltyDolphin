@@ -24,6 +24,7 @@ import Data.Depsolver.Repository
 
 import qualified Data.Depsolver.Parse as P
 import qualified Data.Depsolver.Repository as R
+import qualified Data.Depsolver.Repository.Internal as RI
 
 
 -- | Given a list of version strings, ensure that every
@@ -87,7 +88,7 @@ spec = do
          it "the empty repository is not valid with any non-empty state" $
             property (\repoState -> repoState /= emptyRepoState ==> not (validState emptyRepository repoState))
          it "simple case: package with same name but different version in state" $
-            let repo = mkRepository [mkPackage (mkPackageName "A") (mkVersion ["1"]) [] []]
+            let repo = mkRepository [mkPackage (mkPackageName "A") (mkVersion ["1"]) (RI.mkSize 1) [] []]
                 repoState = mkRepoState [mkPackageId (mkPackageName "A") (mkVersion ["2"])]
             in (repo, repoState) `shouldNotSatisfy` uncurry validState
          it "a state is not valid if it contains a package that is not in the repository" $

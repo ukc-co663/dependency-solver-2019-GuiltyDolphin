@@ -17,6 +17,7 @@ import Data.Depsolver.Repository
     , mkVersion
     )
 import qualified Data.Depsolver.Repository as R
+import qualified Data.Depsolver.Repository.Internal as RI
 
 import Data.Depsolver.Parse
     ( parseRepo
@@ -60,12 +61,12 @@ exampleRepoState2 =
 
 packageUnspecifiedDepsAndConflicts :: PackageDesc
 packageUnspecifiedDepsAndConflicts =
-    mkPackage nameA (mkVersion ["1"]) [] []
+    mkPackage nameA (mkVersion ["1"]) (RI.mkSize 1) [] []
 
 
 packageBasic :: PackageDesc
 packageBasic =
-    mkPackage nameA (mkVersion ["1"]) depsB conflictsC
+    mkPackage nameA (mkVersion ["1"]) (RI.mkSize 1) depsB conflictsC
 
 
 spec :: Spec
@@ -86,20 +87,21 @@ spec = do
          it "does not parse empty string" $
             parseRepo "" `shouldBe` Nothing
          it "parses repository with no-dependency, no-conflict package" $ do
-            fmap repoPackages (parseRepo $ mkRepoString [mkPackageString "A" "1"])
+            fmap repoPackages (parseRepo $ mkRepoString [mkPackageString "A" "1" "1"])
                      `shouldBe` Just [packageUnspecifiedDepsAndConflicts]
          it "parses repository with basic package" $ do
             let parseRes = fmap repoPackages
-                           (parseRepo $ mkRepoStringFromSpecs [("A", "1", [["B=2"]], ["C=7.1"])])
+                           (parseRepo $ mkRepoStringFromSpecs [("A", "1", "1", [["B=2"]], ["C=7.1"])])
             parseRes `shouldBe` Just [packageBasic]
             fmap packageName    <$> parseRes `shouldBe` Just [nameA]
             fmap packageVersion <$> parseRes `shouldBe` Just [version1]
             fmap packageDependencies <$> parseRes `shouldBe` Just [depsB]
             fmap packageConflicts <$> parseRes `shouldBe` Just [conflictsC]
-            parseRes `shouldNotBe` Just [mkPackage nameB version1 depsB conflictsC]
-            parseRes `shouldNotBe` Just [mkPackage nameA version2 depsB conflictsC]
-            parseRes `shouldNotBe` Just [mkPackage nameA version1 [] conflictsC]
-            parseRes `shouldNotBe` Just [mkPackage nameA version1 depsB []]
+            parseRes `shouldNotBe` Just [mkPackage nameB version1 size1 depsB conflictsC]
+            parseRes `shouldNotBe` Just [mkPackage nameA version2 size1 depsB conflictsC]
+            parseRes `shouldNotBe` Just [mkPackage nameA version1 size1 [] conflictsC]
+            parseRes `shouldNotBe` Just [mkPackage nameA version1 size1 depsB []]
+            parseRes `shouldNotBe` Just [mkPackage nameA version1 size2 depsB conflictsC]
   describe "parseVersion" $ do
          it "does not parse an empty version string" $
             parseVersion "" `shouldBe` Nothing
@@ -128,3 +130,5 @@ spec = do
             parseRepoState "[\"A=1\", \"B=2.7\"]" `shouldBe` Just exampleRepoState2
       where version1 = mkVersion ["1"]
             version2 = mkVersion ["2"]
+            size1 = RI.mkSize 1
+            size2 = RI.mkSize 2

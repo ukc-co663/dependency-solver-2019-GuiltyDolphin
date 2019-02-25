@@ -70,7 +70,7 @@ data RepoExample = RepoExample
     }
 
 
-mkExampleRepo :: [(String, String, [[String]], [String])] -> RI.Repository
+mkExampleRepo :: [(String, String, String, [[String]], [String])] -> RI.Repository
 mkExampleRepo = fromJust . P.parseRepo . mkRepoStringFromSpecs
 
 
@@ -90,18 +90,18 @@ repoExamples = fmap ((\(r, rs) -> RepoExample (mkExampleRepo r) (fmap mkExampleR
           b2 = ("B", "2")
           b3 = ("B", "3")
           c3 = ("C", "3")
-          b2p = ("B", "2", [], [])
-          b3p = ("B", "3", [], [])
-          c3p = ("C", "3", [], [])
+          b2p = ("B", "2", "100", [], [])
+          b3p = ("B", "3", "200", [], [])
+          c3p = ("C", "3", "300", [], [])
           repoExample1 =
-              ( [("A", "1", [], [])]
+              ( [("A", "1", "1", [], [])]
               , [[a1]] )
           repoExample2 =
-              ( [ ("A", "1", [["B=2"]], []), b2p ]
+              ( [ ("A", "1", "1", [["B=2"]], []), b2p ]
               , [ [a1, b2]
                 , [b2] ] )
           repoExample3 =
-              ( [ ("A", "1", [["B=2"], ["C=3"]], []), b2p, c3p ]
+              ( [ ("A", "1", "1", [["B=2"], ["C=3"]], []), b2p, c3p ]
               , [ [a1, b2, c3]
                 , [a1, b2]
                 , [a1, c3]
@@ -109,14 +109,14 @@ repoExamples = fmap ((\(r, rs) -> RepoExample (mkExampleRepo r) (fmap mkExampleR
                 , [b2]
                 , [c3] ] )
           repoExample4 =
-              ( [ ("A", "1", [["B=2"]], []), b2p, b3p ]
+              ( [ ("A", "1", "1", [["B=2"]], []), b2p, b3p ]
               , [ [a1, b2, b3]
                 , [a1, b2]
                 , [b2, b3]
                 , [b2]
                 , [b3] ] )
           repoExample5 =
-              ( [ ("A", "1", [["B"]], []), b2p, b3p ]
+              ( [ ("A", "1", "1", [["B"]], []), b2p, b3p ]
               , [ [a1, b2, b3]
                 , [a1, b2]
                 , [a1, b3]
@@ -125,21 +125,35 @@ repoExamples = fmap ((\(r, rs) -> RepoExample (mkExampleRepo r) (fmap mkExampleR
                 , [b3] ] )
 
 
-mkPackageString :: String -> String -> String
-mkPackageString name version =
-    concat ["{\"name\": \"", name, "\", \"version\": \"", version, "\"}"]
+-- | Helper for building a JSON key-value pair.
+kv :: String -> String -> String
+kv k v = concat ["\"", k, "\": ", v]
 
 
-mkPackageStringFull :: String -> String -> [[String]] -> [String] -> String
-mkPackageStringFull name version deps conflicts =
+-- | Helper for building a JSON key-value pair
+-- | where the value is a string.
+kvs :: String -> String -> String
+kvs k v = kv k ('"':v++"\"")
+
+
+mkPackageString :: String -> String -> String -> String
+mkPackageString name version size =
     concat [ "{"
            ,       kvs "name" name
            , ", ", kvs "version" version
+           , ", ", kv  "size" size
+           , "}"]
+
+
+mkPackageStringFull :: String -> String -> String -> [[String]] -> [String] -> String
+mkPackageStringFull name version size deps conflicts =
+    concat [ "{"
+           ,       kvs "name" name
+           , ", ", kvs "version" version
+           , ", ", kv  "size" size
            , ", ", kv  "depends" (show deps)
            , ", ", kv  "conflicts" (show conflicts)
            , "}"]
-    where kv k v  = concat ["\"", k, "\": ", v]
-          kvs k v = kv k ('"':v++"\"")
 
 
 jarryStr :: [String] -> String
@@ -151,10 +165,10 @@ mkRepoString :: [String] -> String
 mkRepoString = jarryStr
 
 
-mkRepoStringFromSpecs :: [(String, String, [[String]], [String])] -> String
+mkRepoStringFromSpecs :: [(String, String, String, [[String]], [String])] -> String
 mkRepoStringFromSpecs =
-    mkRepoString . map (\(name, version, depends, conflicts) ->
-                            mkPackageStringFull name version depends conflicts)
+    mkRepoString . map (\(name, version, size, depends, conflicts) ->
+                            mkPackageStringFull name version size depends conflicts)
 
 
 mkRepoStateString :: [(String, String)] -> String
@@ -203,9 +217,10 @@ instance Arbitrary RI.Repository where
       pvs <- arbitrary
       fmap RI.mkRepository $ mapM (arbyPackage pvs) pvs
       where arbyPackage pvs (RI.PackageId (pname, pversion)) = do
-                                   deps <- arby pvs
-                                   conflicts <- arby pvs
-                                   pure $ RI.mkPackage pname pversion deps conflicts
+              size <- arbitrary
+              deps <- arby pvs
+              conflicts <- arby pvs
+              pure $ RI.mkPackage pname pversion size deps conflicts
 
 
 getPackageIds :: RepoGen [RI.PackageId]
@@ -225,9 +240,7 @@ lookupOrNew pv = do
   repo <- get
   case find ((==pv) . RI.packageId) (RI.repoPackages repo) of
     Just p -> pure p
-    Nothing -> let (RI.PackageId (pname, pversion)) = pv
-                   p = RI.mkPackage pname pversion [] []
-               in putPackage p >> pure p
+    Nothing -> newPackage pv
 
 
 modifyPackages :: ([RI.PackageDesc] -> [RI.PackageDesc]) -> RepoGen ()
@@ -237,10 +250,11 @@ modifyPackages f = modify (RI.mkRepository . f . RI.repoPackages)
 -- | Create a new package with no dependencies or conflicts.
 -- | If a package with the given identifier already exists,
 -- | it is overwritten.
-newPackage :: RI.PackageId -> RepoGen ()
-newPackage (RI.PackageId (pname, pversion)) =
-    let p = RI.mkPackage pname pversion [] []
-    in putPackage p
+newPackage :: RI.PackageId -> RepoGen RI.PackageDesc
+newPackage (RI.PackageId (pname, pversion)) = do
+  size <- liftGen arbitrary
+  let p = RI.mkPackage pname pversion size [] []
+  putPackage p >> pure p
 
 
 -- | Generate a new package with a unique combination
@@ -250,8 +264,7 @@ genNewPackage :: RepoGen RI.PackageId
 genNewPackage = do
   pvs <- getPackageIds
   pv <- liftGen (arbitrary `suchThat` (`notElem` pvs))
-  newPackage pv
-  pure pv
+  newPackage pv >> pure pv
 
 
 -- | Generate a new package with a unique combination
@@ -262,8 +275,7 @@ genNewPackageWithVersion v = do
   pvs <- getPackageIds
   name <- liftGen (arbitrary `suchThat` (\n -> (RI.mkPackageId n v) `notElem` pvs))
   let pv = RI.mkPackageId name v
-  newPackage pv
-  pure pv
+  newPackage pv >> pure pv
 
 
 putPackage :: RI.PackageDesc -> RepoGen ()
@@ -278,8 +290,7 @@ makeConflictOp op p1pv p2pv v = do
     p1 <- lookupOrNew p1pv
     p2 <- lookupOrNew p2pv
     let dep = RI.mkDependency (RI.packageName p2) op v
-        p1' = RI.mkPackage (RI.packageName p1) (RI.packageVersion p1)
-              (RI.packageDependencies p1) (dep : RI.packageConflicts p1)
+        p1' = p1 { RI.packageConflicts = dep : RI.packageConflicts p1 }
     putPackage p1'
 
 
@@ -294,8 +305,7 @@ makeWildConflict p1pv p2pv = do
     p1 <- lookupOrNew p1pv
     p2 <- lookupOrNew p2pv
     let dep = RI.mkWildcardDependency (RI.packageName p2)
-        p1' = RI.mkPackage (RI.packageName p1) (RI.packageVersion p1)
-              (RI.packageDependencies p1) (dep : RI.packageConflicts p1)
+        p1' = p1 { RI.packageConflicts = dep : RI.packageConflicts p1 }
     putPackage p1'
 
 
@@ -304,8 +314,7 @@ makeDependencies p1pv p2pvs = do
     p1 <- lookupOrNew p1pv
     targets <- mapM (mapM lookupOrNew) p2pvs
     let deps = fmap (fmap (\target -> RI.mkDependency (RI.packageName target) RI.VEQ (RI.packageVersion target))) targets
-        p1' = RI.mkPackage (RI.packageName p1) (RI.packageVersion p1)
-              (deps ++ RI.packageDependencies p1) (RI.packageConflicts p1)
+        p1' = p1 { RI.packageDependencies = deps ++ RI.packageDependencies p1 }
     putPackage p1'
 
 
@@ -322,11 +331,13 @@ instance Arbitrary RI.PackageDesc where
     arbitrary = do
       name <- arbitrary
       version <- arbitrary
+      size <- arbitrary
       deps <- arbitrary
       conflicts <- arbitrary
       pure $ RI.PackageDesc {
                   RI.packageName = name
                 , RI.packageVersion = version
+                , RI.packageSize = size
                 , RI.packageDependencies = deps
                 , RI.packageConflicts = conflicts
                 }
@@ -340,6 +351,12 @@ instance Arbitrary RI.PackageName where
 instance ArbyRepo RI.PackageName where
     arby = elements . fmap pvName
         where pvName = fst . RI.getPackageId
+
+
+instance Arbitrary RI.Size where
+    -- sizes must be positive
+    arbitrary = fmap (RI.mkSize . getPositive) arbitrary
+    shrink = fmap (RI.mkSize . getPositive) . shrink . Positive . RI.fromSize
 
 
 instance Arbitrary RI.RepoState where

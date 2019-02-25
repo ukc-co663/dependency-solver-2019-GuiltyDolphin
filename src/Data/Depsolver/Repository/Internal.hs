@@ -20,6 +20,10 @@ module Data.Depsolver.Repository.Internal
     , mkPackageName
     , packageId
 
+    -- *** Package Size
+    , Size(..)
+    , mkSize
+
     -- ** Dependencies
     , VersionMatch(..)
     , VersionCmp(..)
@@ -245,11 +249,25 @@ mkVersion :: [String] -> Version
 mkVersion vs = Version vs (canonicalVersionString vs)
 
 
+-- | A package size (a postive integer).
+newtype Size = Size { fromSize :: Int } deriving (Eq, Ord)
+
+
+deriving instance TJ.JSON Size
+
+
+-- | Create a new package size.
+mkSize :: Int -> Size
+mkSize = Size
+
+
 data PackageDesc = PackageDesc {
       -- ^ Name of the package.
       packageName :: PackageName
       -- ^ Version of the package.
     , packageVersion :: Version
+      -- ^ Size of the package.
+    , packageSize :: Size
       -- ^ Dependencies of the package
       -- ^ (as a conjunction of disjunctions).
     , packageDependencies :: [[VersionMatch]]
@@ -261,20 +279,23 @@ data PackageDesc = PackageDesc {
 instance TJ.JSON PackageDesc where
     showJSON (PackageDesc { packageName = name
                           , packageVersion = version
+                          , packageSize = size
                           , packageDependencies = deps
                           , packageConflicts = conflicts
                           }) = TJ.JSObject $
                              TJ.toJSObject [ ("name", TJ.showJSON . getPackageName $ name)
                                            , ("version", TJ.showJSON version)
+                                           , ("size", TJ.showJSON size)
                                            , ("depends", TJ.showJSON deps)
                                            , ("conflicts", TJ.showJSON conflicts)]
     readJSON (TJ.JSObject p) = do
               let packageMap = TJ.fromJSObject p
               name <- reqField packageMap "name"
               version <- reqField packageMap "version"
+              size <- reqField packageMap "size"
               deps <- optFieldWithDefault [] packageMap "depends"
               conflicts <- optFieldWithDefault [] packageMap "conflicts"
-              pure $ mkPackage name version deps conflicts
+              pure $ mkPackage name version size deps conflicts
         where
           reqField :: (TJ.JSON a) => [(String, TJ.JSValue)] -> String -> TJ.Result a
           reqField pmap fieldName =
@@ -290,10 +311,11 @@ instance Show PackageDesc where
     show = TJ.encodeStrict
 
 
-mkPackage :: PackageName -> Version -> [[VersionMatch]] -> [VersionMatch] -> PackageDesc
-mkPackage name version deps conflicts =
+mkPackage :: PackageName -> Version -> Size -> [[VersionMatch]] -> [VersionMatch] -> PackageDesc
+mkPackage name version size deps conflicts =
     PackageDesc { packageName = name
                 , packageVersion = version
+                , packageSize = size
                 , packageDependencies = deps
                 , packageConflicts = conflicts
                 }
