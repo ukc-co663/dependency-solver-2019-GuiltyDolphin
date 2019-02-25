@@ -3,6 +3,7 @@ module Data.Depsolver.ParseSpec (spec) where
 import TestHelper
 
 import qualified Data.Depsolver.Repository as R
+import qualified Data.Depsolver.Constraint.Internal as RI
 import qualified Data.Depsolver.Repository.Internal as RI
 import qualified Data.Depsolver.RepoState.Internal as RI
 
@@ -11,6 +12,7 @@ import Data.Depsolver.Parse
     , parseVersion
     , parseDependency
     , parseRepoState
+    , parseConstraints
     )
 
 
@@ -68,6 +70,8 @@ spec = do
            forAll (scaleTiny arbitrary) (parseTest parseRepo)
          it "parseRepoState" $ do
            forAll (scaleTiny arbitrary) (parseTest parseRepoState)
+         it "parseConstraints" $ do
+           forAll (scaleTiny arbitrary) (parseTest parseConstraints)
   describe "parseRepo" $ do
          it "parses empty repository" $
             parseRepo "[]" `shouldBe` Just RI.emptyRepository
@@ -115,7 +119,21 @@ spec = do
             parseRepoState "[\"A=1\"]" `shouldBe` Just exampleRepoState1
          it "repository with two packages" $
             parseRepoState "[\"A=1\", \"B=2.7\"]" `shouldBe` Just exampleRepoState2
-      where version1 = RI.mkVersion ["1"]
+  describe "parseConstraints" $ do
+         it "empty constraints" $
+            parseConstraints "[]" `shouldBe` Just RI.emptyConstraints
+         it "single positive wildcard constraint" $
+            parseConstraints "[\"+A\"]" `shouldBe` Just exampleConstraints1
+         it "single negative wildcard constraint" $
+            parseConstraints "[\"-B\"]" `shouldBe` Just exampleConstraints2
+         it "a positive and a negative wildcard constraint" $
+            parseConstraints "[\"+A\", \"-B\"]" `shouldBe` Just exampleConstraints3
+      where exampleConstraints1 = RI.mkConstraints [exampleConstraint1]
+            exampleConstraints2 = RI.mkConstraints [exampleConstraint2]
+            exampleConstraints3 = RI.mkConstraints [exampleConstraint1, exampleConstraint2]
+            exampleConstraint1 = RI.mkPositiveConstraint (RI.mkWildcardDependency nameA)
+            exampleConstraint2 = RI.mkNegativeConstraint (RI.mkWildcardDependency nameB)
+            version1 = RI.mkVersion ["1"]
             version2 = RI.mkVersion ["2"]
             size1 = RI.mkSize 1
             size2 = RI.mkSize 2

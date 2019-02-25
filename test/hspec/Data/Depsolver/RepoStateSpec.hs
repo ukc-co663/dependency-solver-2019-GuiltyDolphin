@@ -42,7 +42,7 @@ spec = do
   describe "fileCases" $ do
          describe "example valid states are valid" $
                   runIO fileCaseExamples >>=
-                        mapM_ (\(dir, (repo, repoState))
+                        mapM_ (\(dir, (repo, repoState, _))
                                    -> it dir (validState repo repoState `shouldBe` True))
   describe "validState" $ do
          it "the empty state is valid for any repository" $

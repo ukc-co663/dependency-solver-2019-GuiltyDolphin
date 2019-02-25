@@ -3,10 +3,12 @@ module Data.Depsolver.Parse
     , parseVersion
     , parseDependency
     , parseRepoState
+    , parseConstraints
     ) where
 
 import qualified Text.JSON as TJ
 
+import qualified Data.Depsolver.Constraint as C
 import qualified Data.Depsolver.Repository as R
 import qualified Data.Depsolver.RepoState as RS
 import Data.Depsolver.Repository.Internal (parseVersion)
@@ -29,3 +31,8 @@ parseDependency = resToMaybe . TJ.decode
 -- | Parse a JSON list of installed packages as a 'RepoState'.
 parseRepoState :: String -> Maybe RS.RepoState
 parseRepoState = resToMaybe . TJ.decodeStrict
+
+
+-- | Parse a set of package constraints.
+parseConstraints :: String -> Maybe C.Constraints
+parseConstraints = resToMaybe . TJ.decodeStrict

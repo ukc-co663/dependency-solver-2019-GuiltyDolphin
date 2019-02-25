@@ -47,21 +47,24 @@ import qualified System.FilePath.Find as Find
 import System.FilePath.Find ((==?), (&&?), (~~?), always)
 
 import qualified Data.Depsolver.Parse as P
+import qualified Data.Depsolver.Constraint.Internal as RI
 import qualified Data.Depsolver.Repository.Internal as RI
 import qualified Data.Depsolver.RepoState.Internal as RI
 
 
-fileCaseExamples :: (MonadIO m) => m [(FilePath, (RI.Repository, RI.RepoState))]
+fileCaseExamples :: (MonadIO m) => m [(FilePath, (RI.Repository, RI.RepoState, RI.Constraints))]
 fileCaseExamples = do
   directories <- liftIO $ Find.find always (Find.fileType ==? Find.Directory
                                            &&? Find.fileName ~~? "(seen|example)-*") testCasesDir
-  let exampleFiles = map (\d -> (d, (d </> "repository.json", d </> "initial.json"))) directories
-  mapM (\(d, (repoFile, repoStateFile)) -> do
+  let exampleFiles = map (\d -> (d, (d </> "repository.json", d </> "initial.json", d </> "constraints.json"))) directories
+  mapM (\(d, (repoFile, repoStateFile, constraintFile)) -> do
           repoS <- liftIO $ readFile repoFile
           repoStateS <- liftIO $ readFile repoStateFile
+          constraintsS <- liftIO $ readFile constraintFile
           let Just repo = P.parseRepo repoS
               Just repoState = P.parseRepoState repoStateS
-          pure (d, (repo, repoState))) exampleFiles
+              Just constraints = P.parseConstraints constraintsS
+          pure (d, (repo, repoState, constraints))) exampleFiles
   where testCasesDir = "test/cases"
 
 
@@ -422,3 +425,17 @@ instance ArbyRepo RI.VersionMatch where
 
 instance Arbitrary RI.VersionCmp where
     arbitrary = elements [RI.VLTE, RI.VLT, RI.VEQ, RI.VGT, RI.VGTE]
+
+
+instance Arbitrary RI.Constraints where
+    arbitrary = fmap RI.mkConstraints arbitrary
+    shrink = fmap RI.mkConstraints . shrink . RI.fromConstraints
+
+
+instance Arbitrary RI.Constraint where
+    arbitrary = do
+      dep <- arbitrary
+      wanted <- arbitrary
+      pure $ (if wanted
+              then RI.mkPositiveConstraint
+              else RI.mkNegativeConstraint) dep

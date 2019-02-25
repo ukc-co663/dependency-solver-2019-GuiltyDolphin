@@ -35,6 +35,10 @@ module Data.Depsolver.Repository.Internal
     , mkVersion
     , toVersionList
     , parseVersion
+
+    -- ** Parser helpers
+    , parseDependency
+    , wantString
     ) where
 
 
@@ -303,26 +307,30 @@ instance Show VersionMatch where
 instance TJ.JSON VersionMatch where
     showJSON = TJ.JSString . TJ.toJSString . show
     readJSON = maybe (TJ.Error "version specifier string") parseDependency . wantString
-        where parseDependency :: String -> TJ.Result VersionMatch
-              parseDependency ds =
-                  case break (`elem` "<=>") ds of
-                    (pname, "") -> pure . mkWildcardDependency . mkPackageName $ pname
-                    (pname, op:vs) ->
-                        let (vop, verStr) = case op of
-                                              '=' -> (VEQ, vs)
-                                              _   -> case vs of
-                                                       '=':vs' -> (case op of
-                                                                     '<' -> VLTE
-                                                                     '>' -> VGTE
-                                                                     _   -> error "pattern already satisfied"
-                                                                  , vs')
-                                                       _ -> (case op of
-                                                               '<' -> VLT
-                                                               '>' -> VGT
-                                                               _   -> error "pattern already satisfied"
-                                                            , vs)
-                        in maybe (TJ.Error "version") TJ.Ok (parseVersion verStr)
-                               >>= pure . mkDependency (mkPackageName pname) vop
+
+
+-- | Parse a dependency string (without quotes).
+parseDependency :: String -> TJ.Result VersionMatch
+parseDependency ds =
+    case break (`elem` "<=>") ds of
+      (pname, "") -> pure . mkWildcardDependency . mkPackageName $ pname
+      (pname, op:vs) ->
+          let (vop, verStr) =
+                  case op of
+                    '=' -> (VEQ, vs)
+                    _   -> case vs of
+                             '=':vs' -> (case op of
+                                           '<' -> VLTE
+                                           '>' -> VGTE
+                                           _   -> error "pattern already satisfied"
+                                        , vs')
+                             _ -> (case op of
+                                     '<' -> VLT
+                                     '>' -> VGT
+                                     _   -> error "pattern already satisfied"
+                                  , vs)
+          in maybe (TJ.Error "version") TJ.Ok (parseVersion verStr)
+                 >>= pure . mkDependency (mkPackageName pname) vop
 
 
 mkDependency :: PackageName -> VersionCmp -> Version -> VersionMatch
