@@ -162,13 +162,11 @@ spec = do
                 where conflictGen = do
                             p1 <- genNewPackage
                             y <- versionSat yreq
-                            let p1name = packageIdName p1
-                            p2y <- genNewPackageWithVersion y `G.suchThat` ((/=p1name) . packageIdName)
-                            x <- versionSat (op . packageIdVersion $ p2y)
+                            let p1name = RI.packageIdName p1
+                            p2y <- genNewPackageWithVersion y `G.suchThat` ((/=p1name) . RI.packageIdName)
+                            x <- versionSat (op . RI.packageIdVersion $ p2y)
                             makeConflictOp opCmp p1 p2y x
                             pure (p1, p2y)
-                      packageIdVersion = snd . RI.getPackageId
-                      packageIdName = fst . RI.getPackageId
             zeroVersion = RI.mkVersion ["0"]
             noReq = const True
             -- | Generate a package that is guaranteed not to be in the repository.

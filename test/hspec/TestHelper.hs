@@ -353,8 +353,7 @@ instance Arbitrary RI.PackageName where
 
 
 instance ArbyRepo RI.PackageName where
-    arby = elements . fmap pvName
-        where pvName = fst . RI.getPackageId
+    arby = elements . fmap RI.packageIdName
 
 
 instance Arbitrary RI.Size where
@@ -399,8 +398,7 @@ instance Arbitrary RI.Version where
 
 
 instance ArbyRepo RI.Version where
-    arby = elements . fmap pvVersion
-        where pvVersion = snd . RI.getPackageId
+    arby = elements . fmap RI.packageIdVersion
 
 
 instance Arbitrary RI.VersionMatch where

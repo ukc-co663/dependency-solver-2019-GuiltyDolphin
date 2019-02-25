@@ -29,6 +29,8 @@ module Data.Depsolver.Repository.Internal
     -- ** Installed Packages
     , PackageId(..)
     , mkPackageId
+    , packageIdName
+    , packageIdVersion
 
     -- ** Versions
     , Version
@@ -147,6 +149,16 @@ instance TJ.JSON PackageId where
 -- | its installed version.
 mkPackageId :: PackageName -> Version -> PackageId
 mkPackageId = curry PackageId
+
+
+-- | Get the package name from a package identifier.
+packageIdName :: PackageId -> PackageName
+packageIdName = fst . getPackageId
+
+
+-- | Get the package version from a package identifier.
+packageIdVersion :: PackageId -> Version
+packageIdVersion = snd . getPackageId
 
 
 data Version = Version {
