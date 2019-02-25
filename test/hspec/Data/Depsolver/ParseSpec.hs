@@ -49,13 +49,13 @@ conflictsC = [verMatchC71]
 
 
 exampleRepoState1 :: R.RepoState
-exampleRepoState1 = R.mkRepoState [R.mkPackageVersion nameA (mkVersion ["1"])]
+exampleRepoState1 = R.mkRepoState [R.mkPackageId nameA (mkVersion ["1"])]
 
 
 exampleRepoState2 :: R.RepoState
 exampleRepoState2 =
-    R.mkRepoState [ R.mkPackageVersion nameA (mkVersion ["1"])
-                  , R.mkPackageVersion nameB (mkVersion ["2", "7"])]
+    R.mkRepoState [ R.mkPackageId nameA (mkVersion ["1"])
+                  , R.mkPackageId nameB (mkVersion ["2", "7"])]
 
 
 packageUnspecifiedDepsAndConflicts :: PackageDesc

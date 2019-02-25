@@ -17,7 +17,7 @@ import Data.Depsolver.Repository
     , mkVersion
     , mkPackage
     , mkPackageName
-    , mkPackageVersion
+    , mkPackageId
     , toVersionList
     )
 
@@ -88,7 +88,7 @@ spec = do
             property (\repoState -> repoState /= emptyRepoState ==> not (validState emptyRepository repoState))
          it "simple case: package with same name but different version in state" $
             let repo = mkRepository [mkPackage (mkPackageName "A") (mkVersion ["1"]) [] []]
-                repoState = mkRepoState [mkPackageVersion (mkPackageName "A") (mkVersion ["2"])]
+                repoState = mkRepoState [mkPackageId (mkPackageName "A") (mkVersion ["2"])]
             in (repo, repoState) `shouldNotSatisfy` uncurry validState
          it "a state is not valid if it contains a package that is not in the repository" $
             propStateInvalid withoutPackage repoStateWithPackages1
@@ -204,8 +204,8 @@ spec = do
                             x <- versionSat (op . packageIdVersion $ p2y)
                             makeConflictOp opCmp p1 p2y x
                             pure (p1, p2y)
-                      packageIdVersion = snd . R.getPackageVersion
-                      packageIdName = fst . R.getPackageVersion
+                      packageIdVersion = snd . R.getPackageId
+                      packageIdName = fst . R.getPackageId
             zeroVersion = mkVersion ["0"]
             noReq = const True
             -- | Generate a package that is guaranteed not to be in the repository.

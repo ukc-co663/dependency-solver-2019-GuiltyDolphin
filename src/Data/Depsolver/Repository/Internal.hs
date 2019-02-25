@@ -18,7 +18,7 @@ module Data.Depsolver.Repository.Internal
     , mkPackage
     , PackageName(..)
     , mkPackageName
-    , toPackageVersion
+    , packageId
 
     -- ** Dependencies
     , VersionMatch(..)
@@ -27,8 +27,8 @@ module Data.Depsolver.Repository.Internal
     , mkWildcardDependency
 
     -- ** Installed Packages
-    , PackageVersion(..)
-    , mkPackageVersion
+    , PackageId(..)
+    , mkPackageId
 
     -- ** Versions
     , Version
@@ -76,8 +76,8 @@ emptyRepository :: Repository
 emptyRepository = Repository { repoPackages = [] }
 
 
-getPackage :: Repository -> PackageVersion -> Maybe PackageDesc
-getPackage r pv = find (\p -> pv == toPackageVersion p) (repoPackages r)
+getPackage :: Repository -> PackageId -> Maybe PackageDesc
+getPackage r pv = find (\p -> pv == packageId p) (repoPackages r)
 
 
 getPackagesThatSatisfy :: Repository -> VersionMatch -> Maybe [PackageDesc]
@@ -103,7 +103,7 @@ getPackageAnyVersion r pn = let matching = filter ((==pn) . packageName) (repoPa
 -- | The list of installed packages (and their versions).
 newtype RepoState = RepoState {
       -- ^ Packages and their installed version.
-      repoStatePackageVersions :: [PackageVersion]
+      repoStatePackageIds :: [PackageId]
     } deriving (Eq)
 
 
@@ -116,7 +116,7 @@ instance Show RepoState where
 
 -- | Create a new repository state with the given installed
 -- | packages.
-mkRepoState :: [PackageVersion] -> RepoState
+mkRepoState :: [PackageId] -> RepoState
 mkRepoState = RepoState
 
 
@@ -128,7 +128,7 @@ emptyRepoState = RepoState []
 -- | True if the state is valid given the constraints of
 -- | the repository.
 validState :: Repository -> RepoState -> Bool
-validState r rs = all meetsPackageDependencies . repoStatePackageVersions $ rs
+validState r rs = all meetsPackageDependencies . repoStatePackageIds $ rs
     where meetsPackageDependencies pv =
               maybe False (\p -> meetsADependency (packageDependencies p)
                                  && meetsNoConflicts (packageConflicts p)) (getPackage r pv)
@@ -138,7 +138,7 @@ validState r rs = all meetsPackageDependencies . repoStatePackageVersions $ rs
           stateMeetsConflict vm =
               maybe False stateHasAnyOf $ getPackagesThatSatisfy r vm
           stateHasAnyOf = any stateHasPackage
-          stateHasPackage pv = (toPackageVersion pv) `elem` (repoStatePackageVersions rs)
+          stateHasPackage pv = (packageId pv) `elem` (repoStatePackageIds rs)
           meetsADependency [] = True
           meetsADependency deps = any stateMeetsDependency deps
           meetsNoConflicts = not . any stateMeetsConflict
@@ -162,16 +162,16 @@ mkPackageName = PackageName
 
 
 -- | A package and its installed version.
-newtype PackageVersion = PackageVersion {
-      getPackageVersion :: (PackageName, Version)
+newtype PackageId = PackageId {
+      getPackageId :: (PackageName, Version)
     } deriving (Eq)
 
 
-instance Show PackageVersion where
-    show (PackageVersion (p, v)) = show p <> "=" <> show v
+instance Show PackageId where
+    show (PackageId (p, v)) = show p <> "=" <> show v
 
 
-instance TJ.JSON PackageVersion where
+instance TJ.JSON PackageId where
     showJSON = TJ.JSString . TJ.toJSString . show
     readJSON =
         maybe (TJ.Error "package=version") TJ.Ok . ((>>= parsePackState) . wantString)
@@ -179,14 +179,14 @@ instance TJ.JSON PackageVersion where
           parsePackState pv =
               case break (=='=') pv of
                 (name, '=':versionStr) ->
-                    fmap (mkPackageVersion (mkPackageName name)) (parseVersion versionStr)
+                    fmap (mkPackageId (mkPackageName name)) (parseVersion versionStr)
                 _ -> Nothing
 
 
--- | Make a new PackageVersion from a package name and
+-- | Make a new PackageId from a package name and
 -- | its installed version.
-mkPackageVersion :: PackageName -> Version -> PackageVersion
-mkPackageVersion = curry PackageVersion
+mkPackageId :: PackageName -> Version -> PackageId
+mkPackageId = curry PackageId
 
 
 data Version = Version {
@@ -299,8 +299,8 @@ mkPackage name version deps conflicts =
                 }
 
 
-toPackageVersion :: PackageDesc -> PackageVersion
-toPackageVersion = uncurry mkPackageVersion . (packageName&&&packageVersion)
+packageId :: PackageDesc -> PackageId
+packageId = uncurry mkPackageId . (packageName&&&packageVersion)
 
 
 data VersionCmp = VLTE | VLT | VEQ | VGT | VGTE

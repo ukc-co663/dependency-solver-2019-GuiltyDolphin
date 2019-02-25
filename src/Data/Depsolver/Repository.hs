@@ -29,9 +29,9 @@ module Data.Depsolver.Repository
     , mkWildcardDependency
 
     -- ** Installed Packages
-    , PackageVersion
-    , getPackageVersion
-    , mkPackageVersion
+    , PackageId
+    , getPackageId
+    , mkPackageId
 
     -- ** Versions
     , Version

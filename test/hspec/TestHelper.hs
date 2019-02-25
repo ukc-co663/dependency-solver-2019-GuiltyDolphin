@@ -162,7 +162,7 @@ mkRepoStateString = jarryStr . fmap (\(p, v) -> concat ["\"", p, "=", v, "\""])
 
 
 class ArbyRepo a where
-    arby :: [(RI.PackageVersion)] -> Gen a
+    arby :: [(RI.PackageId)] -> Gen a
 
 
 instance ArbyRepo a => ArbyRepo [a] where
@@ -202,30 +202,30 @@ instance Arbitrary RI.Repository where
     arbitrary = do
       pvs <- arbitrary
       fmap RI.mkRepository $ mapM (arbyPackage pvs) pvs
-      where arbyPackage pvs (RI.PackageVersion (pname, pversion)) = do
+      where arbyPackage pvs (RI.PackageId (pname, pversion)) = do
                                    deps <- arby pvs
                                    conflicts <- arby pvs
                                    pure $ RI.mkPackage pname pversion deps conflicts
 
 
-getPackageVersions :: RepoGen [RI.PackageVersion]
-getPackageVersions = fmap (fmap RI.toPackageVersion . RI.repoPackages) get
+getPackageIds :: RepoGen [RI.PackageId]
+getPackageIds = fmap (fmap RI.packageId . RI.repoPackages) get
 
 
 removePackagesBy :: (RI.PackageDesc -> Bool) -> RepoGen ()
 removePackagesBy p = modifyPackages (filter (not . p))
 
 
-deletePackage :: RI.PackageVersion -> RepoGen ()
-deletePackage pv = removePackagesBy ((==pv) . RI.toPackageVersion)
+deletePackage :: RI.PackageId -> RepoGen ()
+deletePackage pv = removePackagesBy ((==pv) . RI.packageId)
 
 
-lookupOrNew :: RI.PackageVersion -> RepoGen RI.PackageDesc
+lookupOrNew :: RI.PackageId -> RepoGen RI.PackageDesc
 lookupOrNew pv = do
   repo <- get
-  case find ((==pv) . RI.toPackageVersion) (RI.repoPackages repo) of
+  case find ((==pv) . RI.packageId) (RI.repoPackages repo) of
     Just p -> pure p
-    Nothing -> let (RI.PackageVersion (pname, pversion)) = pv
+    Nothing -> let (RI.PackageId (pname, pversion)) = pv
                    p = RI.mkPackage pname pversion [] []
                in putPackage p >> pure p
 
@@ -237,8 +237,8 @@ modifyPackages f = modify (RI.mkRepository . f . RI.repoPackages)
 -- | Create a new package with no dependencies or conflicts.
 -- | If a package with the given identifier already exists,
 -- | it is overwritten.
-newPackage :: RI.PackageVersion -> RepoGen ()
-newPackage (RI.PackageVersion (pname, pversion)) =
+newPackage :: RI.PackageId -> RepoGen ()
+newPackage (RI.PackageId (pname, pversion)) =
     let p = RI.mkPackage pname pversion [] []
     in putPackage p
 
@@ -246,9 +246,9 @@ newPackage (RI.PackageVersion (pname, pversion)) =
 -- | Generate a new package with a unique combination
 -- | of name and version. The package will have no
 -- | conflicts or dependencies.
-genNewPackage :: RepoGen RI.PackageVersion
+genNewPackage :: RepoGen RI.PackageId
 genNewPackage = do
-  pvs <- getPackageVersions
+  pvs <- getPackageIds
   pv <- liftGen (arbitrary `suchThat` (`notElem` pvs))
   newPackage pv
   pure pv
@@ -257,11 +257,11 @@ genNewPackage = do
 -- | Generate a new package with a unique combination
 -- | of name and (the given) version. The package will
 -- | have no conflicts or dependencies.
-genNewPackageWithVersion :: RI.Version -> RepoGen RI.PackageVersion
+genNewPackageWithVersion :: RI.Version -> RepoGen RI.PackageId
 genNewPackageWithVersion v = do
-  pvs <- getPackageVersions
-  name <- liftGen (arbitrary `suchThat` (\n -> (RI.mkPackageVersion n v) `notElem` pvs))
-  let pv = RI.mkPackageVersion name v
+  pvs <- getPackageIds
+  name <- liftGen (arbitrary `suchThat` (\n -> (RI.mkPackageId n v) `notElem` pvs))
+  let pv = RI.mkPackageId name v
   newPackage pv
   pure pv
 
@@ -270,10 +270,10 @@ putPackage :: RI.PackageDesc -> RepoGen ()
 putPackage p =
     modifyPackages insertPackageUniquely
     where insertPackageUniquely = (p:) . filter ((not . equalPV p))
-          equalPV p1 p2 = RI.toPackageVersion p1 == RI.toPackageVersion p2
+          equalPV p1 p2 = RI.packageId p1 == RI.packageId p2
 
 
-makeConflictOp :: RI.VersionCmp -> RI.PackageVersion -> RI.PackageVersion -> RI.Version -> RepoGen ()
+makeConflictOp :: RI.VersionCmp -> RI.PackageId -> RI.PackageId -> RI.Version -> RepoGen ()
 makeConflictOp op p1pv p2pv v = do
     p1 <- lookupOrNew p1pv
     p2 <- lookupOrNew p2pv
@@ -283,13 +283,13 @@ makeConflictOp op p1pv p2pv v = do
     putPackage p1'
 
 
-makeConflict :: RI.PackageVersion -> RI.PackageVersion -> RepoGen ()
+makeConflict :: RI.PackageId -> RI.PackageId -> RepoGen ()
 makeConflict p1pv p2pv = do
   p2v <- fmap RI.packageVersion $ lookupOrNew p2pv
   makeConflictOp RI.VEQ p1pv p2pv p2v
 
 
-makeWildConflict :: RI.PackageVersion -> RI.PackageVersion -> RepoGen ()
+makeWildConflict :: RI.PackageId -> RI.PackageId -> RepoGen ()
 makeWildConflict p1pv p2pv = do
     p1 <- lookupOrNew p1pv
     p2 <- lookupOrNew p2pv
@@ -299,7 +299,7 @@ makeWildConflict p1pv p2pv = do
     putPackage p1'
 
 
-makeDependencies :: RI.PackageVersion -> [[RI.PackageVersion]] -> RepoGen ()
+makeDependencies :: RI.PackageId -> [[RI.PackageId]] -> RepoGen ()
 makeDependencies p1pv p2pvs = do
     p1 <- lookupOrNew p1pv
     targets <- mapM (mapM lookupOrNew) p2pvs
@@ -309,7 +309,7 @@ makeDependencies p1pv p2pvs = do
     putPackage p1'
 
 
-makeDependency :: RI.PackageVersion -> [RI.PackageVersion] -> RepoGen ()
+makeDependency :: RI.PackageId -> [RI.PackageId] -> RepoGen ()
 makeDependency p1pv p2pvs = makeDependencies p1pv [p2pvs]
 
 
@@ -339,35 +339,35 @@ instance Arbitrary RI.PackageName where
 
 instance ArbyRepo RI.PackageName where
     arby = elements . fmap pvName
-        where pvName = fst . RI.getPackageVersion
+        where pvName = fst . RI.getPackageId
 
 
 instance Arbitrary RI.RepoState where
     arbitrary = fmap (RI.mkRepoState . nub) arbitrary
-    shrink = fmap RI.mkRepoState . shrink . RI.repoStatePackageVersions
+    shrink = fmap RI.mkRepoState . shrink . RI.repoStatePackageIds
 
 
 -- | Create a new repository state with the given package versions.
-repoStateWithPackages :: [RI.PackageVersion] -> RI.RepoState
+repoStateWithPackages :: [RI.PackageId] -> RI.RepoState
 repoStateWithPackages pvs =
   let repoState = RI.emptyRepoState
   in foldl' addRepoStatePackage repoState pvs
     where addRepoStatePackage rs pv =
-              RI.mkRepoState . nub . (pv:) . RI.repoStatePackageVersions $ rs
+              RI.mkRepoState . nub . (pv:) . RI.repoStatePackageIds $ rs
 
 
-stateElem :: RI.PackageVersion -> RI.RepoState -> Bool
-stateElem pv = (pv `elem`) . RI.repoStatePackageVersions
+stateElem :: RI.PackageId -> RI.RepoState -> Bool
+stateElem pv = (pv `elem`) . RI.repoStatePackageIds
 
 
 arbyState :: RepoGen RI.RepoState
 arbyState = do
   repo <- get
-  let allowedPackages = fmap RI.toPackageVersion $ RI.repoPackages repo
+  let allowedPackages = fmap RI.packageId $ RI.repoPackages repo
   liftGen (fmap RI.mkRepoState $ sublistOf allowedPackages)
 
 
-deriving instance Arbitrary RI.PackageVersion
+deriving instance Arbitrary RI.PackageId
 
 
 instance Arbitrary RI.Version where
@@ -379,7 +379,7 @@ instance Arbitrary RI.Version where
 
 instance ArbyRepo RI.Version where
     arby = elements . fmap pvVersion
-        where pvVersion = snd . RI.getPackageVersion
+        where pvVersion = snd . RI.getPackageId
 
 
 instance Arbitrary RI.VersionMatch where
