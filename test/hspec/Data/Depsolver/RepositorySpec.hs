@@ -151,7 +151,7 @@ spec = do
                                       makeConflict p2 p3
                                       pure p1)
                                       repoStateWithPackages1
-                 it "A~A, [any state with A]" $
+                 it "A~A, [anything with A]" $
                     propStateInvalid (do
                                       p <- genNewPackage
                                       makeConflict p p
