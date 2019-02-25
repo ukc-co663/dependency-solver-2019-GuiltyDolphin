@@ -75,6 +75,11 @@ spec = do
                                      (p1, p2, p3) <- gen3packages
                                      makeDependencies p1 [[p2], [p3]]
                                      pure (p1, p3)) repoStateWithPackages2
+                 it "A>>[[B, C]], [A, B, C]" $
+                    propStateValid (do
+                                     (p1, p2, p3) <- gen3packages
+                                     makeDependencies p1 [[p2, p3]]
+                                     pure (p1, p2, p3)) repoStateWithPackages3
          context "unmet dependencies" $ do
                  it "A>>B, [A]" $
                     propStateInvalid genNewDependency (repoStateWithPackages1 . fst)
@@ -87,6 +92,11 @@ spec = do
                                      (p1, p2, p3) <- gen3packages
                                      makeDependencies p1 [[p2], [p3]]
                                      pure p1) repoStateWithPackages1
+                 it "A>>[[B, C]], [A, B]" $
+                    propStateInvalid (do
+                                     (p1, p2, p3) <- gen3packages
+                                     makeDependencies p1 [[p2, p3]]
+                                     pure (p1, p2)) repoStateWithPackages2
          context "without conflicts" $ do
                  it "A~B=x, y!=x, [A, B=y]" $
                     conflictTest propStateValid noReq RI.VEQ (/=)

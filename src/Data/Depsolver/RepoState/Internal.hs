@@ -46,9 +46,8 @@ validState r rs = all meetsPackageDependencies . repoStatePackageIds $ rs
     where meetsPackageDependencies pv =
               maybe False (\p -> meetsADependency (packageDependencies p)
                                  && meetsNoConflicts (packageConflicts p)) (getPackage r pv)
-          stateMeetsDependency [vm] =
-            maybe False stateHasAnyOf $ getPackagesThatSatisfy r vm
-          stateMeetsDependency _ = False
+          stateMeetsDependency vms =
+            all (maybe False stateHasAnyOf . getPackagesThatSatisfy r) vms
           stateMeetsConflict vm =
               maybe False stateHasAnyOf $ getPackagesThatSatisfy r vm
           stateHasAnyOf = any stateHasPackage
