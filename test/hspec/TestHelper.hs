@@ -180,7 +180,7 @@ mkRepoStateString = jarryStr . fmap (\(p, v) -> concat ["\"", p, "=", v, "\""])
 
 
 class ArbyRepo a where
-    arby :: [(RI.PackageId)] -> Gen a
+    arby :: [RI.PackageId] -> Gen a
 
 
 instance ArbyRepo a => ArbyRepo [a] where
