@@ -37,8 +37,16 @@ spec = do
         p1 <- genNewPackage
         let rs = emptyRepoState
             rsFinal = repoStateWithPackages [p1]
-            cstr = mkWildConstraints [p1]
+            cstr = mkWildPositiveConstraints [p1]
             cmds = [RI.mkInstall p1]
+        pure (rs, cstr, (rsFinal, cmds)))
+    it "([A], [A], [-A]) ==> ([], [-A])" $
+      checkSolver (do
+        p1 <- genNewPackage
+        let rs = repoStateWithPackages [p1]
+            rsFinal = emptyRepoState
+            cstr = mkWildNegativeConstraints [p1]
+            cmds = [RI.mkUninstall p1]
         pure (rs, cstr, (rsFinal, cmds)))
       where -- | Check that the solver produces the expected result for the generated
             -- | inputs.
@@ -48,7 +56,10 @@ spec = do
                               let res = solve repo cstrs initState
                               in res === Just (expectedState, expectedCmds))
 
-            mkWildConstraints :: [PackageId] -> Constraints
-            mkWildConstraints = RI.mkConstraints . fmap mkPositiveWildConstraint
+            mkWildPositiveConstraints, mkWildNegativeConstraints :: [PackageId] -> Constraints
+            mkWildPositiveConstraints = RI.mkConstraints . fmap mkPositiveWildConstraint
             mkPositiveWildConstraint =
                 RI.mkPositiveConstraint . RI.mkWildcardDependency . RI.packageIdName
+            mkWildNegativeConstraints = RI.mkConstraints . fmap mkNegativeWildConstraint
+            mkNegativeWildConstraint =
+                RI.mkNegativeConstraint . RI.mkWildcardDependency . RI.packageIdName
