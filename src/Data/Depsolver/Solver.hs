@@ -51,10 +51,14 @@ solveRec r cstrs unconsumed cmdsAcc rs =
     where nextValidStates = case validNextCommands of
                               [] -> Nothing
                               cmds -> pure $ fmap (\c -> (runCommand c rs, c)) cmds
-          validNextCommands = unconsumed \\ installedCommands
+          validNextCommands = filter (\c -> validState r (runCommand c rs)) sensibleNextCommands
+          sensibleNextCommands = (unconsumed \\ installedCommands) \\ uninstalledCommands
           -- commands that would install already-installed packages
-          installedCommands = fmap mkInstall $ repoStatePackageIds rs
+          installedCommands = fmap mkInstall $ spids
+          -- commands that would uninstall already-uninstalled packages
+          uninstalledCommands = fmap mkUninstall $ pids \\ spids
           pids = fmap packageId $ repoPackages r
+          spids = repoStatePackageIds rs
           runCommand (Install v) rstate = installPackage v rstate
           runCommand (Uninstall v) rstate = uninstallPackage v rstate
 
