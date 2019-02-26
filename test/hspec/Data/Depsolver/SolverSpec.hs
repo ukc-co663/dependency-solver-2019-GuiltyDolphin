@@ -32,7 +32,7 @@ spec = do
       property (\repo -> forAll (gen2 (arbitrary `suchThat` validState repo, arbyRepo repo)) $
                 \(rstate, constrs) -> let res = solve repo constrs rstate
                                       in counterexample (show res) (maybe False (validState repo . fst) res))
-    it "[A], [], [+A], => ([A], [+A])" $
+    it "([A], [], [+A]) ==> ([A], [+A])" $
       checkSolver (do
         p1 <- genNewPackage
         let rs = emptyRepoState
