@@ -454,3 +454,12 @@ instance Arbitrary RI.Constraint where
       pure $ (if wanted
               then RI.mkPositiveConstraint
               else RI.mkNegativeConstraint) dep
+
+
+instance ArbyRepo RI.Constraint where
+    arby rs = do
+      dep <- arby rs
+      wanted <- arbitrary
+      pure $ (if wanted
+              then RI.mkPositiveConstraint
+              else RI.mkNegativeConstraint) dep
