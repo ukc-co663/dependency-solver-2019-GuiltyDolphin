@@ -46,7 +46,7 @@ import QuickCheck.GenT (liftGen)
 
 import Control.Monad.IO.Class (MonadIO, liftIO)
 import Control.Monad.State (MonadState, State, get, modify, runState, state, lift)
-import Data.List (find, foldl', intersperse)
+import Data.List (foldl', intersperse)
 import Data.Maybe (fromJust)
 import System.FilePath ((</>))
 
@@ -253,7 +253,7 @@ deletePackage pv = removePackagesBy ((==pv) . RI.packageId)
 lookupOrNew :: RI.PackageId -> RepoGen RI.PackageDesc
 lookupOrNew pv = do
   repo <- get
-  case find ((==pv) . RI.packageId) (RI.repoPackages repo) of
+  case RI.lookupPackage pv repo of
     Just p -> pure p
     Nothing -> newPackage pv
 

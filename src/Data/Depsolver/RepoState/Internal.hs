@@ -63,7 +63,7 @@ repoStatePackageIds = Set.toList . fromRepoState
 validState :: Repository -> RepoState -> Bool
 validState r rs = all meetsPackageDependencies . repoStatePackageIds $ rs
     where meetsPackageDependencies pv =
-              maybe False (\p -> stateMeetsConstraints r rs (packageDependencies p) (packageConflicts p)) (getPackage r pv)
+              maybe False (\p -> stateMeetsConstraints r rs (packageDependencies p) (packageConflicts p)) (lookupPackage pv r)
 
 
 -- | True if the state is valid for the given dependencies and conflicts.

@@ -6,7 +6,8 @@ module Data.Depsolver.Repository.Internal
       Repository(..)
     , mkRepository
     , emptyRepository
-    , getPackage
+    , repoPackages
+    , lookupPackage
     , getPackagesThatSatisfy
 
     -- ** Packages
@@ -59,7 +60,9 @@ module Data.Depsolver.Repository.Internal
 import Control.Arrow ((&&&))
 import qualified Data.Foldable as F
 import Data.Function (on)
-import Data.List (dropWhileEnd, find, intersperse)
+import Data.Hashable (Hashable, hashWithSalt)
+import qualified Data.HashMap.Strict as M
+import Data.List (dropWhileEnd, intersperse)
 import Data.Maybe (fromMaybe)
 import qualified Data.Set as Set
 
@@ -71,15 +74,24 @@ wantString (TJ.JSString s) = Just $ TJ.fromJSString s
 wantString _ = Nothing
 
 
+type PackageMap = M.HashMap PackageName (M.HashMap Version PackageDesc)
+
+
 -- | Repository containing information about available
 -- | packages.
 newtype Repository = Repository {
       -- ^ Available packages in the repository.
-      repoPackages :: [PackageDesc]
+      fromRepository :: PackageMap
     } deriving (Eq)
 
 
-deriving instance TJ.JSON Repository
+repoPackages :: Repository -> [PackageDesc]
+repoPackages = mapOp (M.foldr (\vmap packs -> packs <> M.elems vmap) [])
+
+
+instance TJ.JSON Repository where
+    readJSON = fmap mkRepository . TJ.readJSON
+    showJSON = TJ.showJSON . repoPackages
 
 
 instance Show Repository where
@@ -88,16 +100,28 @@ instance Show Repository where
 
 -- | Create a new repository with the given package descriptions.
 mkRepository :: [PackageDesc] -> Repository
-mkRepository = Repository
+mkRepository pvs =
+    Repository $ foldr insertPackage' M.empty pvs
+    where insertPackage' p m =
+              let n = packageName p
+                  v = packageVersion p
+                  vmap = M.lookupDefault M.empty n m
+                  vmap' = M.insert v p vmap
+              in M.insert n vmap' m
 
 
 -- | Repository with no packages.
 emptyRepository :: Repository
-emptyRepository = Repository { repoPackages = [] }
+emptyRepository = Repository M.empty
 
 
-getPackage :: Repository -> PackageId -> Maybe PackageDesc
-getPackage r pv = find (\p -> pv == packageId p) (repoPackages r)
+mapOp :: (PackageMap -> a) -> Repository -> a
+mapOp f = f . fromRepository
+
+
+lookupPackage :: PackageId -> Repository -> Maybe PackageDesc
+lookupPackage pid r = let (n, v) = getPackageId pid
+                      in mapOp (\m -> M.lookup n m >>= M.lookup v) r
 
 
 getPackagesThatSatisfy :: Repository -> VersionMatch -> Maybe [PackageDesc]
@@ -116,12 +140,11 @@ getPackagesThatSatisfy r (VersionMatch pname cmp version) = do
 
 
 getPackageAnyVersion :: Repository -> PackageName -> Maybe [PackageDesc]
-getPackageAnyVersion r pn = let matching = filter ((==pn) . packageName) (repoPackages r)
-                            in if null matching then Nothing else Just matching
+getPackageAnyVersion r pn = mapOp (fmap M.elems . M.lookup pn) r
 
 
 newtype PackageName = PackageName { getPackageName :: String }
-    deriving (Eq, Ord)
+    deriving (Eq, Ord, Hashable)
 
 
 instance Show PackageName where
@@ -182,6 +205,10 @@ data Version = Version {
       toVersionList :: [String]
     , getCanonicalVersionString :: [Integer]
     }
+
+
+instance Hashable Version where
+    hashWithSalt n (Version _ cv) = hashWithSalt n cv
 
 
 -- | Produce the canonical representation of the given version.
