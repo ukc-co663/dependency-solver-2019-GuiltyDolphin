@@ -9,7 +9,7 @@ module Data.Depsolver.Solver
     ) where
 
 
-import Data.List ((\\))
+import Data.List ((\\), delete)
 import Data.Maybe (fromMaybe, listToMaybe)
 
 import Data.Depsolver.Constraint
@@ -41,17 +41,17 @@ mkUninstall :: PackageId -> Command
 mkUninstall = Uninstall
 
 
-solveRec :: Repository -> Constraints -> [Command] -> RepoState -> Maybe (RepoState, [Command])
-solveRec r cstrs cmdsAcc rs =
+solveRec :: Repository -> Constraints -> [Command] -> [Command] -> RepoState -> Maybe (RepoState, [Command])
+solveRec r cstrs [] cmdsAcc rs =
+    if satisfiesConstraints r rs cstrs then pure (rs, cmdsAcc) else Nothing
+solveRec r cstrs unconsumed cmdsAcc rs =
     if satisfiesConstraints r rs cstrs then pure (rs, cmdsAcc) else
-        let nextSolns = maybe [] (fmap $ \(s,c) -> solveRec r cstrs (c:cmdsAcc) s) nextValidStates
+        let nextSolns = maybe [] (fmap $ \(s,c) -> solveRec r cstrs (delete c unconsumed) (c:cmdsAcc) s) nextValidStates
         in fromMaybe Nothing (listToMaybe nextSolns)
     where nextValidStates = case validNextCommands of
-                              Nothing -> Nothing
-                              Just [] -> Nothing
-                              Just (cmd:_) -> pure [(runCommand cmd rs, cmd)]
-          validNextCommands = Just (allCommands \\ installedCommands)
-          allCommands = fmap mkInstall pids <> fmap mkUninstall pids
+                              [] -> Nothing
+                              cmds -> pure $ fmap (\c -> (runCommand c rs, c)) cmds
+          validNextCommands = unconsumed \\ installedCommands
           -- commands that would install already-installed packages
           installedCommands = fmap mkInstall $ repoStatePackageIds rs
           pids = fmap packageId $ repoPackages r
@@ -66,7 +66,9 @@ solveRec r cstrs cmdsAcc rs =
 -- | If the constraints cannot be satisfied with a valid state, then this
 -- | returns Nothing.
 solve :: Repository -> Constraints -> RepoState -> Maybe (RepoState, [Command])
-solve r cstrs rs = solveRec r cstrs [] rs
+solve r cstrs rs = solveRec r cstrs allCommands [] rs
+    where allCommands = fmap mkInstall pids <> fmap mkUninstall pids
+          pids = fmap packageId $ repoPackages r
 
 
 satisfiesConstraints :: Repository -> RepoState -> Constraints -> Bool
