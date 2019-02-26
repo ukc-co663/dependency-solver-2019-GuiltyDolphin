@@ -289,12 +289,16 @@ putPackage p =
           equalPV p1 p2 = RI.packageId p1 == RI.packageId p2
 
 
+addConflict :: RI.PackageDesc -> RI.VersionMatch -> RI.PackageDesc
+addConflict p c = p { RI.packageConflicts = RI.mkConflicts [c] <> RI.packageConflicts p }
+
+
 makeConflictOp :: RI.VersionCmp -> RI.PackageId -> RI.PackageId -> RI.Version -> RepoGen ()
 makeConflictOp op p1pv p2pv v = do
     p1 <- lookupOrNew p1pv
     p2 <- lookupOrNew p2pv
     let dep = RI.mkDependency (RI.packageName p2) op v
-        p1' = p1 { RI.packageConflicts = dep : RI.packageConflicts p1 }
+        p1' = addConflict p1 dep
     putPackage p1'
 
 
@@ -309,7 +313,7 @@ makeWildConflict p1pv p2pv = do
     p1 <- lookupOrNew p1pv
     p2 <- lookupOrNew p2pv
     let dep = RI.mkWildcardDependency (RI.packageName p2)
-        p1' = p1 { RI.packageConflicts = dep : RI.packageConflicts p1 }
+        p1' = addConflict p1 dep
     putPackage p1'
 
 
@@ -318,7 +322,7 @@ makeDependencies p1pv p2pvs = do
     p1 <- lookupOrNew p1pv
     targets <- mapM (mapM lookupOrNew) p2pvs
     let deps = fmap (fmap (\target -> RI.mkDependency (RI.packageName target) RI.VEQ (RI.packageVersion target))) targets
-        p1' = p1 { RI.packageDependencies = deps ++ RI.packageDependencies p1 }
+        p1' = p1 { RI.packageDependencies = RI.mkDependencies deps <> RI.packageDependencies p1 }
     putPackage p1'
 
 
@@ -360,6 +364,16 @@ instance Arbitrary RI.Size where
     -- sizes must be positive
     arbitrary = fmap (RI.mkSize . getPositive) arbitrary
     shrink = fmap (RI.mkSize . getPositive) . shrink . Positive . RI.fromSize
+
+
+instance Arbitrary RI.Dependencies where
+    arbitrary = fmap RI.mkDependencies' arbitrary
+    shrink = fmap RI.mkDependencies' . shrink . RI.fromDependencies
+
+
+instance Arbitrary RI.Conflicts where
+    arbitrary = fmap RI.mkConflicts' arbitrary
+    shrink = fmap RI.mkConflicts' . shrink . RI.fromConflicts
 
 
 instance Arbitrary RI.RepoState where

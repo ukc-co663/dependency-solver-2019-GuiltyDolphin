@@ -20,6 +20,12 @@ module Data.Depsolver.Repository
     , mkPackageName
 
     -- ** Dependencies
+    , Dependencies
+    , mkDependencies
+    , dependencyIsMet
+    , Conflicts
+    , mkConflicts
+    , conflictIsMet
     , VersionMatch
     , VersionCmp(..)
     , mkDependency

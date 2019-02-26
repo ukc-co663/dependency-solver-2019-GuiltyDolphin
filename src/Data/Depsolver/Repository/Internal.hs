@@ -21,6 +21,18 @@ module Data.Depsolver.Repository.Internal
     , mkSize
 
     -- ** Dependencies
+    , Dependencies
+    , mkDependencies
+    , mkDependencies'
+    , fromDependencies
+    , emptyDependencies
+    , dependencyIsMet
+    , Conflicts
+    , mkConflicts
+    , mkConflicts'
+    , fromConflicts
+    , emptyConflicts
+    , conflictIsMet
     , VersionMatch(..)
     , VersionCmp(..)
     , mkDependency
@@ -45,9 +57,11 @@ module Data.Depsolver.Repository.Internal
 
 
 import Control.Arrow ((&&&))
+import qualified Data.Foldable as F
 import Data.Function (on)
 import Data.List (dropWhileEnd, find, intersperse)
 import Data.Maybe (fromMaybe)
+import qualified Data.Set as Set
 
 import qualified Text.JSON as TJ
 
@@ -107,7 +121,7 @@ getPackageAnyVersion r pn = let matching = filter ((==pn) . packageName) (repoPa
 
 
 newtype PackageName = PackageName { getPackageName :: String }
-    deriving (Eq)
+    deriving (Eq, Ord)
 
 
 instance Show PackageName where
@@ -229,6 +243,75 @@ mkSize :: Int -> Size
 mkSize = Size
 
 
+-- | Package dependencies as a conjunction of disjunctions.
+newtype Dependencies = Dependencies { fromDependencies :: Set.Set (Set.Set VersionMatch) }
+    deriving (Eq, Semigroup, Show)
+
+
+deriving instance TJ.JSON Dependencies
+
+
+mkDependencies' :: Set.Set (Set.Set VersionMatch) -> Dependencies
+mkDependencies' = Dependencies
+
+
+-- | Construct a set of dependencies from a list of packages to match.
+-- |
+-- | The list should be given as a conjunction of disjunctions; at least
+-- | one requirement from each inner list must be satisfied.
+mkDependencies :: [[VersionMatch]] -> Dependencies
+mkDependencies = mkDependencies' . Set.fromList . fmap Set.fromList
+
+
+-- | The empty set of dependencies.
+emptyDependencies :: Dependencies
+emptyDependencies = mkDependencies []
+
+
+-- | True if a list of packages satisfies the dependencies for some repository.
+dependencyIsMet :: F.Foldable f => Repository -> Dependencies -> f PackageId -> Bool
+dependencyIsMet r deps pvs =
+    let depSet = fromDependencies deps
+    in F.null depSet || F.any meetsDependency depSet
+    where meetsDependency =
+              all (maybe False pvsHasAnyOf . fmap (fmap packageId) . getPackagesThatSatisfy r)
+          pvsHasAnyOf = F.any (`elem`pvs)
+
+
+-- | Package conflicts.
+newtype Conflicts = Conflicts { fromConflicts :: Set.Set VersionMatch }
+    deriving (Eq, Semigroup, Show)
+
+
+deriving instance TJ.JSON Conflicts
+
+
+mkConflicts' :: Set.Set VersionMatch -> Conflicts
+mkConflicts' = Conflicts
+
+
+-- | Construct a set of conflicts from a list of packages to match against.
+-- |
+-- | None of the constraints can be met for the conflicts to be satisfied.
+mkConflicts :: [VersionMatch] -> Conflicts
+mkConflicts = mkConflicts' . Set.fromList
+
+
+-- | The empty set of conflicts.
+emptyConflicts :: Conflicts
+emptyConflicts = mkConflicts []
+
+
+conflictsToDependencies :: Conflicts -> Dependencies
+conflictsToDependencies = Dependencies . Set.singleton . fromConflicts
+
+
+-- | True if a list of packages conflicts with the given conflicts requirement.
+conflictIsMet :: F.Foldable f => Repository -> Conflicts -> f PackageId -> Bool
+conflictIsMet r cs ps = not (F.null (fromConflicts cs))
+                     && dependencyIsMet r (conflictsToDependencies cs) ps
+
+
 data PackageDesc = PackageDesc {
       -- ^ Name of the package.
       packageName :: PackageName
@@ -238,9 +321,9 @@ data PackageDesc = PackageDesc {
     , packageSize :: Size
       -- ^ Dependencies of the package
       -- ^ (as a conjunction of disjunctions).
-    , packageDependencies :: [[VersionMatch]]
+    , packageDependencies :: Dependencies
       -- ^ Packages that conflict with the package.
-    , packageConflicts :: [VersionMatch]
+    , packageConflicts :: Conflicts
     } deriving (Eq)
 
 
@@ -284,8 +367,8 @@ mkPackage name version size deps conflicts =
     PackageDesc { packageName = name
                 , packageVersion = version
                 , packageSize = size
-                , packageDependencies = deps
-                , packageConflicts = conflicts
+                , packageDependencies = mkDependencies deps
+                , packageConflicts = mkConflicts conflicts
                 }
 
 
@@ -294,7 +377,7 @@ packageId = uncurry mkPackageId . (packageName&&&packageVersion)
 
 
 data VersionCmp = VLTE | VLT | VEQ | VGT | VGTE
-                  deriving (Eq)
+                  deriving (Eq, Ord)
 
 
 instance Show VersionCmp where
@@ -308,7 +391,7 @@ instance Show VersionCmp where
 
 data VersionMatch = VersionMatch PackageName VersionCmp Version
                   | VersionMatchWild PackageName
-                    deriving (Eq)
+                    deriving (Eq, Ord)
 
 
 instance Show VersionMatch where
