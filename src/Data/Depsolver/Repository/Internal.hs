@@ -140,7 +140,7 @@ mkPackageName = PackageName
 -- | A package and its installed version.
 newtype PackageId = PackageId {
       getPackageId :: (PackageName, Version)
-    } deriving (Eq)
+    } deriving (Eq, Ord)
 
 
 instance Show PackageId where

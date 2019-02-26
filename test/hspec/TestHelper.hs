@@ -39,7 +39,7 @@ import QuickCheck.GenT (liftGen)
 
 import Control.Monad.IO.Class (MonadIO, liftIO)
 import Control.Monad.State (MonadState, State, get, modify, runState, state, lift)
-import Data.List (find, foldl', intersperse, nub)
+import Data.List (find, foldl', intersperse)
 import Data.Maybe (fromJust)
 import System.FilePath ((</>))
 
@@ -377,17 +377,15 @@ instance Arbitrary RI.Conflicts where
 
 
 instance Arbitrary RI.RepoState where
-    arbitrary = fmap (RI.mkRepoState . nub) arbitrary
-    shrink = fmap RI.mkRepoState . shrink . RI.repoStatePackageIds
+    arbitrary = fmap RI.mkRepoState' arbitrary
+    shrink = fmap RI.mkRepoState' . shrink . RI.fromRepoState
 
 
 -- | Create a new repository state with the given package versions.
 repoStateWithPackages :: [RI.PackageId] -> RI.RepoState
 repoStateWithPackages pvs =
   let repoState = RI.emptyRepoState
-  in foldl' addRepoStatePackage repoState pvs
-    where addRepoStatePackage rs pv =
-              RI.mkRepoState . nub . (pv:) . RI.repoStatePackageIds $ rs
+  in foldl' (flip RI.installPackage) repoState pvs
 
 
 stateElem :: RI.PackageId -> RI.RepoState -> Bool
