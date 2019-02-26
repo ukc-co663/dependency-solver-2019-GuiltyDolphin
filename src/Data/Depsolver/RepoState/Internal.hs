@@ -18,28 +18,33 @@ module Data.Depsolver.RepoState.Internal
     ) where
 
 
-import qualified Data.Set as Set
+import qualified Data.HashSet as Set
 
 import qualified Text.JSON as TJ
 
 import Data.Depsolver.Repository
 
 
+type Set = Set.HashSet
+
+
 -- | The list of installed packages (and their versions).
 newtype RepoState = RepoState {
       -- ^ Packages and their installed version.
-      fromRepoState :: Set.Set PackageId
+      fromRepoState :: Set PackageId
     } deriving (Eq)
 
 
-deriving instance TJ.JSON RepoState
+instance TJ.JSON RepoState where
+    readJSON = fmap mkRepoState . TJ.readJSON
+    showJSON = TJ.showJSON . repoStatePackageIds
 
 
 instance Show RepoState where
     show = TJ.encodeStrict
 
 
-mkRepoState' :: Set.Set PackageId -> RepoState
+mkRepoState' :: Set PackageId -> RepoState
 mkRepoState' = RepoState
 
 
@@ -74,7 +79,7 @@ stateMeetsConstraints r rs dependencies conflicts =
        && not (conflictIsMet r conflicts pids)
 
 
-modifyAsSet :: (Set.Set PackageId -> Set.Set PackageId) -> RepoState -> RepoState
+modifyAsSet :: (Set PackageId -> Set PackageId) -> RepoState -> RepoState
 modifyAsSet f = mkRepoState' . f . fromRepoState
 
 

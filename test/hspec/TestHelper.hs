@@ -388,8 +388,8 @@ instance Arbitrary RI.Conflicts where
 
 
 instance Arbitrary RI.RepoState where
-    arbitrary = fmap RI.mkRepoState' arbitrary
-    shrink = fmap RI.mkRepoState' . shrink . RI.fromRepoState
+    arbitrary = fmap RI.mkRepoState arbitrary
+    shrink = fmap RI.mkRepoState . shrink . RI.repoStatePackageIds
 
 
 -- | Create a new repository state with the given package versions.
