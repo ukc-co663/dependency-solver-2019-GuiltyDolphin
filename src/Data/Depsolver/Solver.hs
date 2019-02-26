@@ -70,7 +70,7 @@ solveRec r cstrs unconsumed cmdsAcc rs =
 -- | If the constraints cannot be satisfied with a valid state, then this
 -- | returns Nothing.
 solve :: Repository -> Constraints -> RepoState -> Maybe (RepoState, [Command])
-solve r cstrs rs = solveRec r cstrs allCommands [] rs
+solve r cstrs = fmap (\(s, cs) -> (s, reverse cs)) . solveRec r cstrs allCommands []
     where allCommands = fmap mkInstall pids <> fmap mkUninstall pids
           pids = fmap packageId $ repoPackages r
 
