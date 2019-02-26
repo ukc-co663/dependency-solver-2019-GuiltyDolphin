@@ -30,6 +30,13 @@ module TestHelper
     , getExampleRepo
     , getExampleValidStates
     , fileCaseExamples
+
+    -- ** RepoGen helpers
+    , with2NewPackages
+    , gen2packages
+    , gen3packages
+    , genNewDependency
+    , makeDependency1
     ) where
 
 import Test.Hspec
@@ -181,6 +188,10 @@ mkRepoStateString = jarryStr . fmap (\(p, v) -> concat ["\"", p, "=", v, "\""])
 
 class ArbyRepo a where
     arby :: [RI.PackageId] -> Gen a
+
+
+arbyRepo :: (ArbyRepo a) => RI.Repository -> Gen a
+arbyRepo = arby . fmap RI.packageId . RI.repoPackages
 
 
 instance ArbyRepo a => ArbyRepo [a] where
@@ -463,3 +474,37 @@ instance ArbyRepo RI.Constraint where
       pure $ (if wanted
               then RI.mkPositiveConstraint
               else RI.mkNegativeConstraint) dep
+
+
+---------------------------
+----- RepoGen Helpers -----
+---------------------------
+
+
+type PackagePair = (RI.PackageId, RI.PackageId)
+
+
+makeDependency1 :: PackagePair -> RepoGen ()
+makeDependency1 (p1, p2) = makeDependency p1 [p2]
+
+
+genNewDependency :: RepoGen PackagePair
+genNewDependency = with2NewPackages makeDependency1
+
+
+gen2packages :: RepoGen PackagePair
+gen2packages = do
+  p1 <- genNewPackage
+  p2 <- genNewPackage
+  pure (p1, p2)
+
+
+gen3packages :: RepoGen (RI.PackageId, RI.PackageId, RI.PackageId)
+gen3packages = do
+  p1 <- genNewPackage
+  (p2, p3) <- gen2packages
+  pure (p1, p2, p3)
+
+
+with2NewPackages :: (PackagePair -> RepoGen b) -> RepoGen PackagePair
+with2NewPackages f = gen2packages >>= (\packs -> f packs >> pure packs)

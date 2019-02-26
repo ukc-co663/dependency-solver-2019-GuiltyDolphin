@@ -48,6 +48,14 @@ spec = do
             cstr = mkWildNegativeConstraints [p1]
             cmds = [RI.mkUninstall p1]
         pure (rs, cstr, (rsFinal, cmds)))
+    it "([A>>B], [], [+A]) ==> ([A, B], [+B, +A])" $
+      checkSolver (do
+        (p1, p2) <- genNewDependency
+        let rs = emptyRepoState
+            rsFinal = repoStateWithPackages [p1, p2]
+            cstr = mkEqPositiveConstraints [p1]
+            cmds = [RI.mkInstall p2, RI.mkInstall p1]
+        pure (rs, cstr, (rsFinal, cmds)))
       where -- | Check that the solver produces the expected result for the generated
             -- | inputs.
             checkSolver :: RepoGen (RepoState, Constraints, SolverResult) -> Property
@@ -63,3 +71,7 @@ spec = do
             mkWildNegativeConstraints = RI.mkConstraints . fmap mkNegativeWildConstraint
             mkNegativeWildConstraint =
                 RI.mkNegativeConstraint . RI.mkWildcardDependency . RI.packageIdName
+            mkEqPositiveConstraints = RI.mkConstraints . fmap mkPositiveEqConstraint
+            mkPositiveEqConstraint pid =
+                let (pn, pv) = RI.getPackageId pid
+                in RI.mkPositiveConstraint $ RI.mkDependency pn RI.VEQ pv

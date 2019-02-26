@@ -148,10 +148,7 @@ spec = do
             repoStateWithPackages2 (p1, p2)     = pure $ repoStateWithPackages [p1, p2]
             repoStateWithPackages3 (p1, p2, p3) = pure $ repoStateWithPackages [p1, p2, p3]
 
-            makeDependency1 (p1, p2) = makeDependency p1 [p2]
-            with2NewPackages f = gen2packages >>= (\packs -> f packs >> pure packs)
             genNewWildConflict = with2NewPackages (uncurry makeWildConflict)
-            genNewDependency   = with2NewPackages makeDependency1
             genNewConflict     = with2NewPackages (uncurry makeConflict)
 
             makeTransDep = do
@@ -181,11 +178,3 @@ spec = do
             noReq = const True
             -- | Generate a package that is guaranteed not to be in the repository.
             withoutPackage = genNewPackage >>= (\s -> deletePackage s >> pure s)
-            gen2packages = do
-                            p1 <- genNewPackage
-                            p2 <- genNewPackage
-                            pure (p1, p2)
-            gen3packages = do
-                            p1 <- genNewPackage
-                            (p2, p3) <- gen2packages
-                            pure (p1, p2, p3)
