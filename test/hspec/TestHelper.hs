@@ -444,6 +444,11 @@ instance Arbitrary RI.Constraints where
     shrink = fmap RI.mkConstraints . shrink . RI.fromConstraints
 
 
+instance ArbyRepo RI.Constraints where
+    arby [] = pure $ RI.mkConstraints []
+    arby ps = fmap RI.mkConstraints . arby $ ps
+
+
 instance Arbitrary RI.Constraint where
     arbitrary = do
       dep <- arbitrary

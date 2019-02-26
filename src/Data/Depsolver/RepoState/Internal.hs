@@ -5,9 +5,18 @@ module Data.Depsolver.RepoState.Internal
     , repoStatePackageIds
     , emptyRepoState
     , mkRepoState
+
+    -- ** State validity
     , validState
+    , stateMeetsConstraints
+
+    -- ** Manipulating the state
+    , installPackage
+    , uninstallPackage
     ) where
 
+
+import Data.List (delete)
 
 import qualified Text.JSON as TJ
 
@@ -53,3 +62,13 @@ stateMeetsConstraints r rs dependencies conflicts =
     let pids = repoStatePackageIds rs
     in dependencyIsMet r dependencies pids
        && not (conflictIsMet r conflicts pids)
+
+
+-- | Add the package to the state.
+installPackage :: PackageId -> RepoState -> RepoState
+installPackage p = mkRepoState . (p:) . repoStatePackageIds
+
+
+-- | Remove the package from the state.
+uninstallPackage :: PackageId -> RepoState -> RepoState
+uninstallPackage p = mkRepoState . delete p . repoStatePackageIds

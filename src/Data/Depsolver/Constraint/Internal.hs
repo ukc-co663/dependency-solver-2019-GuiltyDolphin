@@ -12,8 +12,11 @@ module Data.Depsolver.Constraint.Internal
     , emptyConstraints
     , fromConstraints
     , mkConstraints
+    , compileConstraintsToPackageConstraints
     ) where
 
+
+import Control.Arrow (first, second)
 
 import qualified Text.JSON as TJ
 
@@ -75,3 +78,15 @@ mkPositiveConstraint = Wanted
 -- | Indicate the final state should not satisfy the given constraint.
 mkNegativeConstraint :: VersionMatch -> Constraint
 mkNegativeConstraint = Unwanted
+
+
+-- | Compile a set of constraints to a set of dependencies and conflicts.
+compileConstraintsToPackageConstraints :: Constraints -> (Dependencies, Conflicts)
+compileConstraintsToPackageConstraints constraints =
+    let (deps1, conflicts) =
+            foldr (\c acc ->
+                       case c of
+                         Wanted p -> first ([p]:) acc
+                         Unwanted p -> second (p:) acc) ([], [])
+                      (fromConstraints constraints)
+    in (mkDependencies deps1, mkConflicts conflicts)
