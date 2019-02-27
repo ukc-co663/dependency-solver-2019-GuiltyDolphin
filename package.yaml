@@ -45,6 +45,7 @@ executables:
     - -Wall
     dependencies:
     - depsolver
+    - json
 
 tests:
   depsolver-test:
