@@ -64,6 +64,11 @@ mkUninstall = Uninstall
 type Cost = Size
 
 
+-- | The cost of uninstalling a package is 10^6.
+uninstallCost :: Cost
+uninstallCost = 1000000
+
+
 solveRec :: Repository -> Constraints -> [Command] -> (Cost, [Command]) -> RepoState -> Maybe (Cost, RepoState, [Command])
 solveRec r cstrs [] (currCost, cmdsAcc) rs =
     if satisfiesConstraints r rs cstrs then pure (currCost, rs, cmdsAcc) else Nothing
@@ -93,7 +98,7 @@ solveRec r cstrs unconsumed (currCost, cmdsAcc) rs =
           -- use 'maxBound' as a guard against invalid operations
           -- (so we would likely never choose them)
           commandCost (Install v) = maybe maxBound packageSize $ lookupPackage v r
-          commandCost (Uninstall v) = maybe maxBound packageSize $ lookupPackage v r
+          commandCost Uninstall{} = uninstallCost
 
 
 -- | Given a repository, a set of constraints, and an initial state,
