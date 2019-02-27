@@ -75,7 +75,7 @@ solveRec r cstrs [] (currCost, cmdsAcc) rs =
 solveRec r cstrs unconsumed (currCost, cmdsAcc) rs =
     if satisfiesConstraints r rs cstrs then pure (currCost, rs, cmdsAcc) else
         let nextSolns = maybe []
-                        (catMaybes . fmap (\(c, s, cmd) -> solveRec r cstrs (delete cmd unconsumed)
+                        (catMaybes . fmap (\(c, s, cmd) -> solveRec r cstrs (deleteCmdSet cmd unconsumed)
                                            (currCost + c, cmd:cmdsAcc) s)) nextValidStates
         in case nextSolns of
              [] -> Nothing
@@ -99,6 +99,12 @@ solveRec r cstrs unconsumed (currCost, cmdsAcc) rs =
           -- (so we would likely never choose them)
           commandCost (Install v) = maybe maxBound packageSize $ lookupPackage v r
           commandCost Uninstall{} = uninstallCost
+          inverseCommand (Install v) = Uninstall v
+          inverseCommand (Uninstall v) = Install v
+          deleteCmdSet c cmds =
+              let inverse = inverseCommand c
+                  wout = delete c cmds
+              in delete inverse wout
 
 
 -- | Given a repository, a set of constraints, and an initial state,
