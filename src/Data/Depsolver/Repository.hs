@@ -13,11 +13,15 @@ module Data.Depsolver.Repository
     , mkPackage
     , packageName
     , packageVersion
+    , packageSize
     , packageDependencies
     , packageConflicts
     , packageId
     , PackageName
     , mkPackageName
+
+    -- *** Package size
+    , Size
 
     -- ** Dependencies
     , Dependencies

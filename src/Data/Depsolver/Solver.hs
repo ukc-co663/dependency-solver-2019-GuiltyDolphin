@@ -9,8 +9,10 @@ module Data.Depsolver.Solver
     ) where
 
 
+import qualified Data.Foldable as F
+import Data.Function (on)
 import Data.List ((\\), delete)
-import Data.Maybe (fromMaybe, listToMaybe)
+import Data.Maybe (catMaybes)
 
 import Data.Depsolver.Constraint
 import Data.Depsolver.RepoState
@@ -41,16 +43,25 @@ mkUninstall :: PackageId -> Command
 mkUninstall = Uninstall
 
 
-solveRec :: Repository -> Constraints -> [Command] -> [Command] -> RepoState -> Maybe (RepoState, [Command])
-solveRec r cstrs [] cmdsAcc rs =
-    if satisfiesConstraints r rs cstrs then pure (rs, cmdsAcc) else Nothing
-solveRec r cstrs unconsumed cmdsAcc rs =
-    if satisfiesConstraints r rs cstrs then pure (rs, cmdsAcc) else
-        let nextSolns = maybe [] (fmap $ \(s,c) -> solveRec r cstrs (delete c unconsumed) (c:cmdsAcc) s) nextValidStates
-        in fromMaybe Nothing (listToMaybe nextSolns)
+-- | The cost of performing an operation
+-- | (or a series of operations).
+type Cost = Size
+
+
+solveRec :: Repository -> Constraints -> [Command] -> (Cost, [Command]) -> RepoState -> Maybe (Cost, RepoState, [Command])
+solveRec r cstrs [] (currCost, cmdsAcc) rs =
+    if satisfiesConstraints r rs cstrs then pure (currCost, rs, cmdsAcc) else Nothing
+solveRec r cstrs unconsumed (currCost, cmdsAcc) rs =
+    if satisfiesConstraints r rs cstrs then pure (currCost, rs, cmdsAcc) else
+        let nextSolns = maybe []
+                        (catMaybes . fmap (\(c, s, cmd) -> solveRec r cstrs (delete cmd unconsumed)
+                                           (currCost + c, cmd:cmdsAcc) s)) nextValidStates
+        in case nextSolns of
+             [] -> Nothing
+             solns -> Just $ cheapest solns
     where nextValidStates = case validNextCommands of
                               [] -> Nothing
-                              cmds -> pure $ fmap (\c -> (runCommand c rs, c)) cmds
+                              cmds -> pure $ fmap (\c -> (commandCost c, runCommand c rs, c)) cmds
           validNextCommands = filter (\c -> validState r (runCommand c rs)) sensibleNextCommands
           sensibleNextCommands = (unconsumed \\ installedCommands) \\ uninstalledCommands
           -- commands that would install already-installed packages
@@ -61,6 +72,12 @@ solveRec r cstrs unconsumed cmdsAcc rs =
           spids = repoStatePackageIds rs
           runCommand (Install v) rstate = installPackage v rstate
           runCommand (Uninstall v) rstate = uninstallPackage v rstate
+          cheapest = F.minimumBy (compare `on` fst3)
+          fst3 (x,_,_) = x
+          -- use 'maxBound' as a guard against invalid operations
+          -- (so we would likely never choose them)
+          commandCost (Install v) = maybe maxBound packageSize $ lookupPackage v r
+          commandCost (Uninstall v) = maybe maxBound packageSize $ lookupPackage v r
 
 
 -- | Given a repository, a set of constraints, and an initial state,
@@ -70,7 +87,7 @@ solveRec r cstrs unconsumed cmdsAcc rs =
 -- | If the constraints cannot be satisfied with a valid state, then this
 -- | returns Nothing.
 solve :: Repository -> Constraints -> RepoState -> Maybe (RepoState, [Command])
-solve r cstrs = fmap (\(s, cs) -> (s, reverse cs)) . solveRec r cstrs allCommands []
+solve r cstrs = fmap (\(_, s, cs) -> (s, reverse cs)) . solveRec r cstrs allCommands (0, [])
     where allCommands = fmap mkInstall pids <> fmap mkUninstall pids
           pids = fmap packageId $ repoPackages r
 

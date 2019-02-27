@@ -29,6 +29,32 @@ type SolverResult = (RepoState, [RI.Command])
    when the given @Preconditions@ are met, the solver should produce a final
    state and set of commands matching @FinalState@ and @Commands@ respectively.
 
+   The syntax for @Repo@, @InitState@, and @FinalState@ follow the syntax
+   specified in 'RepoStateSpec', but additional notation is used to indicate the
+   size of a package (which is irrelevant for 'RepoStateSpec'):
+
+   @
+     A=x@n
+   @
+
+   Describes a package @A@ with version @x@ and size @n@.
+
+   Thus the test:
+
+   @
+     ([A=x@n, A=y@m], [], [+A]), n<m ==> ([A=x], [+A=x])
+   @
+
+   Reads:
+
+   - for a repository with two packages, both called @A@,
+     with different versions, and one being smaller than the other
+   - given an empty initial state
+   - given a constraint that any version of @A@ is installed
+   - the final state should exclusively contain the smaller
+     package
+   - the set of commands should be the command to install the
+     smaller package
 -}
 
 
@@ -71,6 +97,17 @@ spec = do
             rsFinal = repoStateWithPackages [p1, p2]
             cstr = mkEqPositiveConstraints [p1]
             cmds = [RI.mkInstall p2, RI.mkInstall p1]
+        pure (rs, cstr, (rsFinal, cmds)))
+    it "([A=x@n, A=y@m], [], [+A]), n<m ==> ([A=x], [+A=x])" $
+      checkSolver (do
+        p1 <- genNewPackage
+        p2 <- genLargerPackageSameName p1
+        let rs = emptyRepoState
+            rsFinal = repoStateWithPackages [p1]
+            -- this should essentially be just 'A', as these
+            -- packages should have the same name
+            cstr = mkWildPositiveConstraints [p1, p2]
+            cmds = [RI.mkInstall p1]
         pure (rs, cstr, (rsFinal, cmds)))
       where -- | Check that the solver produces the expected result for the generated
             -- | inputs.

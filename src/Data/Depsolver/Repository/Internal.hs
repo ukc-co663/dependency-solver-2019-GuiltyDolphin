@@ -259,7 +259,7 @@ mkVersion vs = Version vs (canonicalVersionString vs)
 
 
 -- | A package size (a postive integer).
-newtype Size = Size { fromSize :: Int } deriving (Eq, Ord)
+newtype Size = Size { fromSize :: Int } deriving (Bounded, Eq, Num, Ord)
 
 
 deriving instance TJ.JSON Size

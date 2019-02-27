@@ -37,6 +37,7 @@ module TestHelper
     , gen3packages
     , genNewDependency
     , makeDependency1
+    , genLargerPackageSameName
     ) where
 
 import Test.Hspec
@@ -262,6 +263,10 @@ modifyPackages :: ([RI.PackageDesc] -> [RI.PackageDesc]) -> RepoGen ()
 modifyPackages f = modify (RI.mkRepository . f . RI.repoPackages)
 
 
+modifyPackage :: (RI.PackageDesc -> RI.PackageDesc) -> RI.PackageId -> RepoGen ()
+modifyPackage f p = modifyPackages (fmap (\p' -> if RI.packageId p' == p then f p' else p'))
+
+
 -- | Create a new package with no dependencies or conflicts.
 -- | If a package with the given identifier already exists,
 -- | it is overwritten.
@@ -279,6 +284,22 @@ genNewPackage :: RepoGen RI.PackageId
 genNewPackage = do
   pvs <- getPackageIds
   pv <- liftGen (arbitrary `suchThat` (`notElem` pvs))
+  newPackage pv >> pure pv
+
+
+-- | Generate a new, unique package with the same name as the given package.
+genNewPackageSameName :: RI.PackageId -> RepoGen RI.PackageId
+genNewPackageSameName = genNewPackageWithName . RI.packageIdName
+
+
+-- | Generate a new package with a unique combination
+-- | of (the given) name and version. The package will
+-- | have no conflicts or dependencies.
+genNewPackageWithName :: RI.PackageName -> RepoGen RI.PackageId
+genNewPackageWithName n = do
+  pvs <- getPackageIds
+  version <- liftGen (arbitrary `suchThat` (\v -> (RI.mkPackageId n v) `notElem` pvs))
+  let pv = RI.mkPackageId n version
   newPackage pv >> pure pv
 
 
@@ -508,3 +529,19 @@ gen3packages = do
 
 with2NewPackages :: (PackagePair -> RepoGen b) -> RepoGen PackagePair
 with2NewPackages f = gen2packages >>= (\packs -> f packs >> pure packs)
+
+
+-- | Generate a package with the same name that is guaranteed to
+-- | have a larger size.
+genLargerPackageSameName :: RI.PackageId -> RepoGen RI.PackageId
+genLargerPackageSameName p = do
+  p2 <- genNewPackageSameName p
+  p1 <- lookupOrNew p
+  largerSize <- sizeSat (>RI.packageSize p1)
+  modifyPackage (\pkg -> pkg { RI.packageSize = largerSize }) p2
+  pure p2
+
+
+-- | Generate a new size satisfying the given predicate.
+sizeSat :: (RI.Size -> Bool) -> RepoGen RI.Size
+sizeSat p = liftGen (arbitrary `suchThat` p)
