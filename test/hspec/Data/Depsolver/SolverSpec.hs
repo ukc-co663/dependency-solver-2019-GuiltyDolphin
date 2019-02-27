@@ -16,6 +16,22 @@ import Data.Depsolver.Solver (solve, satisfiesConstraints)
 type SolverResult = (RepoState, [RI.Command])
 
 
+{- TEST NOTATION
+
+   A test:
+
+   @
+     (Repo, InitState, Constraints), Preconditions ==> (FinalState, Commands)
+   @
+
+   Means that for a repository, initial state, and set of constraints
+   matching @Repo@, @InitState@, and @Constraints@ respectively,
+   when the given @Preconditions@ are met, the solver should produce a final
+   state and set of commands matching @FinalState@ and @Commands@ respectively.
+
+-}
+
+
 spec :: Spec
 spec = do
   describe "satisfiesConstraints" $ do
