@@ -6,8 +6,7 @@ build: deps
 	$(stack) build
 
 deps:
-	./install_deps.sh
-	touch deps
+	@./install_deps.sh
 
 test:
 	$(stack) test
@@ -18,4 +17,4 @@ clean:
 ghci:
 	$(stack) ghci
 
-.PHONY: all build test clean ghci
+.PHONY: all build deps test clean ghci

@@ -1,3 +1,7 @@
 #!/bin/bash
-# TODO: do we want to ensure stack is installed here,
-# or will it come with Haskell platform?
+if [[ $(type stack) ]]; then
+    echo "Nothing to be done for setup"
+else
+    echo "Setting up stack..."
+    wget -qO- https://get.haskellstack.org/ | sh
+fi
