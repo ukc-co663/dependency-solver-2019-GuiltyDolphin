@@ -14,9 +14,12 @@ import Data.Function (on)
 import Data.List ((\\), delete)
 import Data.Maybe (catMaybes)
 
+import qualified Text.JSON as TJ
+
 import Data.Depsolver.Constraint
 import Data.Depsolver.RepoState
 import Data.Depsolver.Repository
+import Data.Depsolver.Repository.Internal (wantString)
 
 
 -- | A command to manipulate the repository state.
@@ -31,6 +34,19 @@ data Command =
 instance Show Command where
     show (Install p)   = '+' : show p
     show (Uninstall p) = '-' : show p
+
+
+instance TJ.JSON Command where
+    showJSON = TJ.JSString . TJ.toJSString . show
+    readJSON = maybe (TJ.Error "command string") parseCommand . wantString
+        where parseCommand :: String -> TJ.Result Command
+              parseCommand (x:s) = do
+                command <- case x of
+                             '+' -> pure Install
+                             '-' -> pure Uninstall
+                             _ -> TJ.Error "command"
+                fmap command $ TJ.readJSON (TJ.JSString . TJ.toJSString $ s)
+              parseCommand _ = TJ.Error "command"
 
 
 -- | Create a command to install the given package.
