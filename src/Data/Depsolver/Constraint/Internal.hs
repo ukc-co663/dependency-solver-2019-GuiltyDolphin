@@ -17,6 +17,7 @@ module Data.Depsolver.Constraint.Internal
 
 
 import Control.Arrow (first, second)
+import Data.List (nub)
 
 import qualified Text.JSON as TJ
 
@@ -62,7 +63,7 @@ instance TJ.JSON Constraint where
 
 -- | Build a set of constraints from a list of constraints.
 mkConstraints :: [Constraint] -> Constraints
-mkConstraints = Constraints
+mkConstraints = Constraints . nub
 
 
 -- | An empty set of constraints.
