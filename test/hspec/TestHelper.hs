@@ -97,6 +97,7 @@ repoExamples = fmap ((\(r, rs) -> RepoExample (mkExampleRepo r) (fmap mkExampleR
                , repoExample3
                , repoExample4
                , repoExample5
+               , repoExample6
                ]
     where a1 = ("A", "1")
           b2 = ("B", "2")
@@ -113,7 +114,7 @@ repoExamples = fmap ((\(r, rs) -> RepoExample (mkExampleRepo r) (fmap mkExampleR
               , [ [a1, b2]
                 , [b2] ] )
           repoExample3 =
-              ( [ ("A", "1", "1", [["B=2"], ["C=3"]], []), b2p, c3p ]
+              ( [ ("A", "1", "1", [["B=2", "C=3"]], []), b2p, c3p ]
               , [ [a1, b2, c3]
                 , [a1, b2]
                 , [a1, c3]
@@ -135,6 +136,12 @@ repoExamples = fmap ((\(r, rs) -> RepoExample (mkExampleRepo r) (fmap mkExampleR
                 , [b2, b3]
                 , [b2]
                 , [b3] ] )
+          repoExample6 =
+              ( [ ("A", "1", "1", [["B=2"], ["C=3"]], []), b2p, c3p ]
+              , [ [a1, b2, c3]
+                , [b2, c3]
+                , [b2]
+                , [c3] ] )
 
 
 -- | Helper for building a JSON key-value pair.

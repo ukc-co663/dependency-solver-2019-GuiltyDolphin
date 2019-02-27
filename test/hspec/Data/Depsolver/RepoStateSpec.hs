@@ -65,21 +65,21 @@ spec = do
                  it "A>>B, B>>A, [A, B]" $
                     propStateValid (with2NewPackages $ \(p1, p2) -> makeDependency1 (p2, p1))
                                    repoStateWithPackages2
-                 it "A>>[[B], [C]], [A, B]" $
+                 it "A>>[[B], [C]], [A, B, C]" $
                     propStateValid (do
                                      (p1, p2, p3) <- gen3packages
                                      makeDependencies p1 [[p2], [p3]]
+                                     pure (p1, p2, p3)) repoStateWithPackages3
+                 it "A>>[[B], [B, C]], [A, B]" $
+                    propStateValid (do
+                                     (p1, p2, p3) <- gen3packages
+                                     makeDependencies p1 [[p2], [p2, p3]]
                                      pure (p1, p2)) repoStateWithPackages2
-                 it "A>>[[B], [C]], [A, C]" $
-                    propStateValid (do
-                                     (p1, p2, p3) <- gen3packages
-                                     makeDependencies p1 [[p2], [p3]]
-                                     pure (p1, p3)) repoStateWithPackages2
-                 it "A>>[[B, C]], [A, B, C]" $
+                 it "A>>[[B, C]], [A, B]" $
                     propStateValid (do
                                      (p1, p2, p3) <- gen3packages
                                      makeDependencies p1 [[p2, p3]]
-                                     pure (p1, p2, p3)) repoStateWithPackages3
+                                     pure (p1, p2)) repoStateWithPackages2
          context "unmet dependencies" $ do
                  it "A>>B, [A]" $
                     propStateInvalid genNewDependency (repoStateWithPackages1 . fst)
@@ -87,15 +87,15 @@ spec = do
                     propStateInvalid makeTransDep (\(p1,p2,_) -> repoStateWithPackages2 (p1, p2))
                  it "A>>B, B>>C, [A, C]" $
                     propStateInvalid makeTransDep (\(p1,_,p3) -> repoStateWithPackages2 (p1, p3))
-                 it "A>>[[B], [C]], [A]" $
-                    propStateInvalid (do
-                                     (p1, p2, p3) <- gen3packages
-                                     makeDependencies p1 [[p2], [p3]]
-                                     pure p1) repoStateWithPackages1
-                 it "A>>[[B, C]], [A, B]" $
+                 it "A>>[[B, C]], [A]" $
                     propStateInvalid (do
                                      (p1, p2, p3) <- gen3packages
                                      makeDependencies p1 [[p2, p3]]
+                                     pure p1) repoStateWithPackages1
+                 it "A>>[[B], [C]], [A, B]" $
+                    propStateInvalid (do
+                                     (p1, p2, p3) <- gen3packages
+                                     makeDependencies p1 [[p2], [p3]]
                                      pure (p1, p2)) repoStateWithPackages2
          context "without conflicts" $ do
                  it "A~B=x, y!=x, [A, B=y]" $

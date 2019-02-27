@@ -299,9 +299,9 @@ emptyDependencies = mkDependencies []
 dependencyIsMet :: F.Foldable f => Repository -> Dependencies -> f PackageId -> Bool
 dependencyIsMet r deps pvs =
     let depSet = fromDependencies deps
-    in F.null depSet || F.any meetsDependency depSet
+    in F.null depSet || F.all meetsDependency depSet
     where meetsDependency =
-              all (maybe False pvsHasAnyOf . fmap (fmap packageId) . getPackagesThatSatisfy r)
+              any (maybe False pvsHasAnyOf . fmap (fmap packageId) . getPackagesThatSatisfy r)
           pvsHasAnyOf = F.any (`elem`pvs)
 
 
@@ -330,7 +330,7 @@ emptyConflicts = mkConflicts []
 
 
 conflictsToDependencies :: Conflicts -> Dependencies
-conflictsToDependencies = Dependencies . Set.singleton . fromConflicts
+conflictsToDependencies = Dependencies . Set.map Set.singleton . fromConflicts
 
 
 -- | True if a list of packages conflicts with the given conflicts requirement.
