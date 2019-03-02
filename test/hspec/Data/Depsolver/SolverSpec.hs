@@ -64,51 +64,52 @@ spec = do
     it "every state satisfies the empty constraints" $
       property (\(repo, rstate) -> satisfiesConstraints repo rstate emptyConstraints)
   describe "solve" $ do
-    it "(_, S, []) ==> (S, [])" $
-      property (\repo -> forAll (arbitrary `suchThat` validState repo) $
-                         \rstate -> solve repo emptyConstraints rstate === Just (rstate, []))
-    it "(_, S, C) when C already satisfied ==> (S, [])" $
-      property (\(repo, rstate) -> forAll (arbitrary `suchThat` satisfiesConstraints repo rstate)
-                $ \constrs -> solve repo constrs rstate === Just (rstate, []))
-    it "a state resulting from solve is always a valid state (if the initial state is valid)" $
-      property (\repo -> forAll (gen2 (arbitrary `suchThat` validState repo, arbyRepo repo)) $
-                \(rstate, constrs) -> let res = solve repo constrs rstate
-                                      in counterexample (show res) (maybe False (validState repo . fst) res))
-    it "([A], [], [+A]) ==> ([A], [+A])" $
-      checkSolver (do
-        p1 <- genNewPackage
-        let rs = emptyRepoState
-            rsFinal = repoStateWithPackages [p1]
-            cstr = mkWildPositiveConstraints [p1]
-            cmds = [RI.mkInstall p1]
-        pure (rs, cstr, (rsFinal, cmds)))
-    it "([A], [A], [-A]) ==> ([], [-A])" $
-      checkSolver (do
-        p1 <- genNewPackage
-        let rs = repoStateWithPackages [p1]
-            rsFinal = emptyRepoState
-            cstr = mkWildNegativeConstraints [p1]
-            cmds = [RI.mkUninstall p1]
-        pure (rs, cstr, (rsFinal, cmds)))
-    it "([A>>B], [], [+A]) ==> ([A, B], [+B, +A])" $
-      checkSolver (do
-        (p1, p2) <- genNewDependency
-        let rs = emptyRepoState
-            rsFinal = repoStateWithPackages [p1, p2]
-            cstr = mkEqPositiveConstraints [p1]
-            cmds = [RI.mkInstall p2, RI.mkInstall p1]
-        pure (rs, cstr, (rsFinal, cmds)))
-    it "([A=x@n, A=y@m], [], [+A]), n<m ==> ([A=x], [+A=x])" $
-      checkSolver (do
-        p1 <- genNewPackage
-        p2 <- genLargerPackageSameName p1
-        let rs = emptyRepoState
-            rsFinal = repoStateWithPackages [p1]
-            -- this should essentially be just 'A', as these
-            -- packages should have the same name
-            cstr = mkWildPositiveConstraints [p1, p2]
-            cmds = [RI.mkInstall p1]
-        pure (rs, cstr, (rsFinal, cmds)))
+    context "with satisfiable constraints" $ do
+      it "(_, S, []) ==> (S, [])" $
+        property (\repo -> forAll (arbitrary `suchThat` validState repo) $
+                           \rstate -> solve repo emptyConstraints rstate === Just (rstate, []))
+      it "(_, S, C) when C already satisfied ==> (S, [])" $
+        property (\(repo, rstate) -> forAll (arbitrary `suchThat` satisfiesConstraints repo rstate)
+                  $ \constrs -> solve repo constrs rstate === Just (rstate, []))
+      it "a state resulting from solve is always a valid state (if the initial state is valid)" $
+        property (\repo -> forAll (gen2 (arbitrary `suchThat` validState repo, arbyRepo repo)) $
+                  \(rstate, constrs) -> let res = solve repo constrs rstate
+                                        in counterexample (show res) (maybe True (validState repo . fst) res))
+      it "([A], [], [+A]) ==> ([A], [+A])" $
+        checkSolver (do
+          p1 <- genNewPackage
+          let rs = emptyRepoState
+              rsFinal = repoStateWithPackages [p1]
+              cstr = mkWildPositiveConstraints [p1]
+              cmds = [RI.mkInstall p1]
+          pure (rs, cstr, (rsFinal, cmds)))
+      it "([A], [A], [-A]) ==> ([], [-A])" $
+        checkSolver (do
+          p1 <- genNewPackage
+          let rs = repoStateWithPackages [p1]
+              rsFinal = emptyRepoState
+              cstr = mkWildNegativeConstraints [p1]
+              cmds = [RI.mkUninstall p1]
+          pure (rs, cstr, (rsFinal, cmds)))
+      it "([A>>B], [], [+A]) ==> ([A, B], [+B, +A])" $
+        checkSolver (do
+          (p1, p2) <- genNewDependency
+          let rs = emptyRepoState
+              rsFinal = repoStateWithPackages [p1, p2]
+              cstr = mkEqPositiveConstraints [p1]
+              cmds = [RI.mkInstall p2, RI.mkInstall p1]
+          pure (rs, cstr, (rsFinal, cmds)))
+      it "([A=x@n, A=y@m], [], [+A]), n<m ==> ([A=x], [+A=x])" $
+        checkSolver (do
+          p1 <- genNewPackage
+          p2 <- genLargerPackageSameName p1
+          let rs = emptyRepoState
+              rsFinal = repoStateWithPackages [p1]
+              -- this should essentially be just 'A', as these
+              -- packages should have the same name
+              cstr = mkWildPositiveConstraints [p1, p2]
+              cmds = [RI.mkInstall p1]
+          pure (rs, cstr, (rsFinal, cmds)))
     context "with unsatisfiable constraints" $ do
       it "([A~A], [], [+A]) ==> Nothing" $
         checkSolverInvalid (do
