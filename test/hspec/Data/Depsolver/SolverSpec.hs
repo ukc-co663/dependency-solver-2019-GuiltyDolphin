@@ -115,6 +115,13 @@ spec = do
           p1 <- genNewPackage
           makeConflict p1 p1
           pure (emptyRepoState, mkEqPositiveConstraints [p1]))
+      it "([A>>[[B,C]], B>>A, C>>[[A,B]]], [], [+A]) ==> Nothing" $
+        checkSolverInvalid (do
+          (p1, p2, p3) <- gen3packages
+          makeDependencies p1 [[p2, p3]]
+          makeDependencies p2 [[p1]]
+          makeDependencies p3 [[p1, p2]]
+          pure (emptyRepoState, mkEqPositiveConstraints [p1]))
       where -- | Check that the solver produces the expected result for the generated
             -- | inputs.
             checkSolver :: RepoGen (RepoState, Constraints, SolverResult) -> Property
