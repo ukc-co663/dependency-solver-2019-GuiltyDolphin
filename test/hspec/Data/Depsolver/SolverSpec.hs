@@ -109,6 +109,12 @@ spec = do
             cstr = mkWildPositiveConstraints [p1, p2]
             cmds = [RI.mkInstall p1]
         pure (rs, cstr, (rsFinal, cmds)))
+    context "with unsatisfiable constraints" $ do
+      it "([A~A], [], [+A]) ==> Nothing" $
+        checkSolverInvalid (do
+          p1 <- genNewPackage
+          makeConflict p1 p1
+          pure (emptyRepoState, mkEqPositiveConstraints [p1]))
       where -- | Check that the solver produces the expected result for the generated
             -- | inputs.
             checkSolver :: RepoGen (RepoState, Constraints, SolverResult) -> Property
@@ -116,6 +122,12 @@ spec = do
                              (\(repo, (initState, cstrs, (expectedState, expectedCmds))) ->
                               let res = solve repo cstrs initState
                               in res === Just (expectedState, expectedCmds))
+
+            -- | Check that the solver determines the given inputs to be unsatisfiable.
+            checkSolverInvalid :: RepoGen (RepoState, Constraints) -> Property
+            checkSolverInvalid rg = forAll (runRepoGen rg)
+                                    (\(repo, (initState, cstrs)) ->
+                                     solve repo cstrs initState === Nothing)
 
             mkWildPositiveConstraints, mkWildNegativeConstraints :: [PackageId] -> Constraints
             mkWildPositiveConstraints = RI.mkConstraints . fmap mkPositiveWildConstraint
