@@ -62,9 +62,6 @@ spec = do
                     propStateValid genNewDependency repoStateWithPackages2
                  it "A>>B, B>>C, [A, B, C]" $
                     propStateValid makeTransDep repoStateWithPackages3
-                 it "A>>B, B>>A, [A, B]" $
-                    propStateValid (with2NewPackages $ \(p1, p2) -> makeDependency1 (p2, p1))
-                                   repoStateWithPackages2
                  it "A>>[[B], [C]], [A, B, C]" $
                     propStateValid (do
                                      (p1, p2, p3) <- gen3packages
@@ -80,6 +77,19 @@ spec = do
                                      (p1, p2, p3) <- gen3packages
                                      makeDependencies p1 [[p2, p3]]
                                      pure (p1, p2)) repoStateWithPackages2
+                 context "with cyclic dependencies" $ do
+                   -- we don't care about how the dependencies came to be satisfied, only that they presently are
+                   it "A>>B, B>>A, [A, B]" $
+                     propStateValid (with2NewPackages $ \(p1, p2) -> makeDependency1 (p2, p1))
+                                    repoStateWithPackages2
+                   -- for example, we would never be able to construct this through a series of commands,
+                   -- but it still represents a valid state
+                   it "A>>A, [A]" $
+                     propStateValid (do
+                       p1 <- genNewPackage
+                       makeDependency p1 [p1]
+                       pure p1)
+                       repoStateWithPackages1
          context "unmet dependencies" $ do
                  it "A>>B, [A]" $
                     propStateInvalid genNewDependency (repoStateWithPackages1 . fst)
