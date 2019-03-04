@@ -11,9 +11,8 @@ module Data.Depsolver.Solver
 
 import qualified Data.Foldable as F
 import Data.Function (on)
+import Data.Hashable (Hashable, hashWithSalt)
 import qualified Data.HashSet as Set
-import Data.List ((\\), delete)
-import Data.Maybe (catMaybes)
 
 import qualified Text.JSON as TJ
 
@@ -23,6 +22,9 @@ import Data.Depsolver.Repository
 import Data.Depsolver.Repository.Internal (wantString)
 
 
+type Set = Set.HashSet
+
+
 -- | A command to manipulate the repository state.
 data Command =
     -- | Install the given package.
@@ -30,6 +32,12 @@ data Command =
     -- | Uninstall the given package.
     Uninstall PackageId
     deriving (Eq)
+
+
+instance Hashable Command where
+    hashWithSalt n = hashWithSalt n . commandToEither
+      where commandToEither (Install x) = Left x
+            commandToEither (Uninstall x) = Right x
 
 
 instance Show Command where
@@ -70,29 +78,28 @@ uninstallCost :: Cost
 uninstallCost = 1000000
 
 
-solveRec :: Repository -> Constraints -> ([Command], Set.HashSet RepoState) -> (Cost, [Command]) -> RepoState -> Maybe (Cost, RepoState, [Command])
-solveRec r cstrs ([], _) (currCost, cmdsAcc) rs =
-    if satisfiesConstraints r rs cstrs then pure (currCost, rs, cmdsAcc) else Nothing
+solveRec :: Repository -> Constraints -> (Set Command, Set RepoState) -> (Cost, [Command]) -> RepoState -> Maybe (Cost, RepoState, [Command])
+solveRec r cstrs (cs, _) (currCost, cmdsAcc) rs | Set.null cs
+    = if satisfiesConstraints r rs cstrs then pure (currCost, rs, cmdsAcc) else Nothing
 solveRec r cstrs (unconsumed, seenStates) (currCost, cmdsAcc) rs =
     if satisfiesConstraints r rs cstrs then pure (currCost, rs, cmdsAcc) else
-        let nextSolns = maybe []
-                        (catMaybes . fmap (\(c, s, cmd) -> solveRec r cstrs (deleteCmdSet cmd unconsumed, newSeenStates)
-                                           (currCost + c, cmd:cmdsAcc) s)) nextValidStates
-        in case nextSolns of
-             [] -> Nothing
-             solns -> Just $ cheapest solns
-    where nextValidStates = case validNextCommandsAndStates of
-                              [] -> Nothing
-                              cmds -> pure $ fmap (\(c,s) -> (commandCost c, s, c)) cmds
-          validNextCommandsAndStates = filter (\(_,s) -> not (Set.member s seenStates) && validState r s)
-                                       $ fmap (\c -> (c, runCommand c rs)) sensibleNextCommands
-          newSeenStates = Set.union (Set.fromList $ fmap snd validNextCommandsAndStates) seenStates
-          sensibleNextCommands = (unconsumed \\ installedCommands) \\ uninstalledCommands
+        let nextSolns = maybe Set.empty
+                        (Set.foldr (\x xs -> maybe xs (`Set.insert`xs) x) Set.empty . Set.map
+                                (\(c, s, cmd) -> solveRec r cstrs (deleteCmdSet cmd unconsumed, newSeenStates)
+                                                   (currCost + c, cmd:cmdsAcc) s)) nextValidStates
+        in if Set.null nextSolns then Nothing else Just (cheapest nextSolns)
+    where nextValidStates = if Set.null validNextCommandsAndStates
+                            then Nothing
+                            else pure $ Set.map (\(c,s) -> (commandCost c, s, c)) validNextCommandsAndStates
+          validNextCommandsAndStates = Set.filter (\(_,s) -> not (Set.member s seenStates) && validState r s)
+                                       $ Set.map (\c -> (c, runCommand c rs)) sensibleNextCommands
+          newSeenStates = Set.union (Set.map snd validNextCommandsAndStates) seenStates
+          sensibleNextCommands = Set.difference (Set.difference unconsumed installedCommands) uninstalledCommands
           -- commands that would install already-installed packages
-          installedCommands = fmap mkInstall $ spids
+          installedCommands = Set.map mkInstall spids
           -- commands that would uninstall already-uninstalled packages
-          uninstalledCommands = fmap mkUninstall $ pids \\ spids
-          pids = fmap packageId $ repoPackages r
+          uninstalledCommands = Set.map mkUninstall $ Set.difference pids spids
+          pids = repoPackageIds r
           spids = repoStatePackageIds rs
           runCommand (Install v) rstate = installPackage v rstate
           runCommand (Uninstall v) rstate = uninstallPackage v rstate
@@ -102,7 +109,7 @@ solveRec r cstrs (unconsumed, seenStates) (currCost, cmdsAcc) rs =
           -- (so we would likely never choose them)
           commandCost (Install v) = maybe maxBound packageSize $ lookupPackage v r
           commandCost Uninstall{} = uninstallCost
-          deleteCmdSet c cmds = delete c cmds
+          deleteCmdSet c cmds = Set.delete c cmds
 
 
 -- | Given a repository, a set of constraints, and an initial state,
@@ -113,8 +120,8 @@ solveRec r cstrs (unconsumed, seenStates) (currCost, cmdsAcc) rs =
 -- | returns Nothing.
 solve :: Repository -> Constraints -> RepoState -> Maybe (RepoState, [Command])
 solve r cstrs rs = fmap (\(_, s, cs) -> (s, reverse cs)) $ solveRec r cstrs (allCommands, Set.singleton rs) (0, []) rs
-    where allCommands = fmap mkInstall pids <> fmap mkUninstall pids
-          pids = fmap packageId $ repoPackages r
+    where allCommands = Set.map mkInstall pids <> Set.map mkUninstall pids
+          pids = repoPackageIds r
 
 
 satisfiesConstraints :: Repository -> RepoState -> Constraints -> Bool

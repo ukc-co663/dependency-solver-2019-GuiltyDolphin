@@ -25,13 +25,13 @@ module Data.Depsolver.Repository.Internal
     , Dependencies
     , mkDependencies
     , mkDependencies'
-    , fromDependencies
+    , dependenciesAsList
     , emptyDependencies
     , dependencyIsMet
     , Conflicts
     , mkConflicts
     , mkConflicts'
-    , fromConflicts
+    , conflictsToList
     , emptyConflicts
     , conflictIsMet
     , VersionMatch(..)
@@ -64,9 +64,12 @@ import Data.Hashable (Hashable, hashWithSalt)
 import qualified Data.HashMap.Strict as M
 import Data.List (dropWhileEnd, intersperse)
 import Data.Maybe (fromMaybe)
-import qualified Data.Set as Set
+import qualified Data.HashSet as Set
 
 import qualified Text.JSON as TJ
+
+
+type Set = Set.HashSet
 
 
 wantString :: TJ.JSValue -> Maybe String
@@ -79,9 +82,11 @@ type PackageMap = M.HashMap PackageName (M.HashMap Version PackageDesc)
 
 -- | Repository containing information about available
 -- | packages.
-newtype Repository = Repository {
+data Repository = Repository {
       -- ^ Available packages in the repository.
       fromRepository :: PackageMap
+      -- ^ Quick access to package Ids
+    , repoPackageIds :: Set PackageId
     } deriving (Eq)
 
 
@@ -101,18 +106,19 @@ instance Show Repository where
 -- | Create a new repository with the given package descriptions.
 mkRepository :: [PackageDesc] -> Repository
 mkRepository pvs =
-    Repository $ foldr insertPackage' M.empty pvs
-    where insertPackage' p m =
+    uncurry (flip Repository) $ foldr insertPackage' (Set.empty, M.empty) pvs
+    where insertPackage' p (pids,m) =
               let n = packageName p
                   v = packageVersion p
                   vmap = M.lookupDefault M.empty n m
                   vmap' = M.insert v p vmap
-              in M.insert n vmap' m
+                  pids' = Set.insert (mkPackageId n v) pids
+              in (pids', M.insert n vmap' m)
 
 
 -- | Repository with no packages.
 emptyRepository :: Repository
-emptyRepository = Repository M.empty
+emptyRepository = Repository M.empty Set.empty
 
 
 mapOp :: (PackageMap -> a) -> Repository -> a
@@ -259,7 +265,7 @@ mkVersion vs = Version vs (canonicalVersionString vs)
 
 
 -- | A package size (a postive integer).
-newtype Size = Size { fromSize :: Int } deriving (Bounded, Eq, Num, Ord)
+newtype Size = Size { fromSize :: Int } deriving (Bounded, Eq, Hashable, Num, Ord)
 
 
 deriving instance TJ.JSON Size
@@ -271,14 +277,16 @@ mkSize = Size
 
 
 -- | Package dependencies as a conjunction of disjunctions.
-newtype Dependencies = Dependencies { fromDependencies :: Set.Set (Set.Set VersionMatch) }
+newtype Dependencies = Dependencies { fromDependencies :: Set (Set VersionMatch) }
     deriving (Eq, Semigroup, Show)
 
 
-deriving instance TJ.JSON Dependencies
+instance TJ.JSON Dependencies where
+    readJSON = fmap mkDependencies . TJ.readJSON
+    showJSON = TJ.showJSON . Set.toList . Set.map Set.toList . fromDependencies
 
 
-mkDependencies' :: Set.Set (Set.Set VersionMatch) -> Dependencies
+mkDependencies' :: Set (Set VersionMatch) -> Dependencies
 mkDependencies' = Dependencies
 
 
@@ -290,30 +298,36 @@ mkDependencies :: [[VersionMatch]] -> Dependencies
 mkDependencies = mkDependencies' . Set.fromList . fmap Set.fromList
 
 
+dependenciesAsList :: Dependencies -> [[VersionMatch]]
+dependenciesAsList = Set.toList . Set.map Set.toList . fromDependencies
+
+
 -- | The empty set of dependencies.
 emptyDependencies :: Dependencies
 emptyDependencies = mkDependencies []
 
 
 -- | True if a list of packages satisfies the dependencies for some repository.
-dependencyIsMet :: F.Foldable f => Repository -> Dependencies -> f PackageId -> Bool
+dependencyIsMet :: Repository -> Dependencies -> Set PackageId -> Bool
 dependencyIsMet r deps pvs =
     let depSet = fromDependencies deps
     in F.null depSet || F.all meetsDependency depSet
     where meetsDependency =
               any (maybe False pvsHasAnyOf . fmap (fmap packageId) . getPackagesThatSatisfy r)
-          pvsHasAnyOf = F.any (`elem`pvs)
+          pvsHasAnyOf = F.any (`Set.member` pvs)
 
 
 -- | Package conflicts.
-newtype Conflicts = Conflicts { fromConflicts :: Set.Set VersionMatch }
+newtype Conflicts = Conflicts { fromConflicts :: Set VersionMatch }
     deriving (Eq, Semigroup, Show)
 
 
-deriving instance TJ.JSON Conflicts
+instance TJ.JSON Conflicts where
+    readJSON = fmap mkConflicts . TJ.readJSON
+    showJSON = TJ.showJSON . Set.toList . fromConflicts
 
 
-mkConflicts' :: Set.Set VersionMatch -> Conflicts
+mkConflicts' :: Set VersionMatch -> Conflicts
 mkConflicts' = Conflicts
 
 
@@ -322,6 +336,10 @@ mkConflicts' = Conflicts
 -- | None of the constraints can be met for the conflicts to be satisfied.
 mkConflicts :: [VersionMatch] -> Conflicts
 mkConflicts = mkConflicts' . Set.fromList
+
+
+conflictsToList :: Conflicts -> [VersionMatch]
+conflictsToList = Set.toList . fromConflicts
 
 
 -- | The empty set of conflicts.
@@ -334,7 +352,7 @@ conflictsToDependencies = Dependencies . Set.map Set.singleton . fromConflicts
 
 
 -- | True if a list of packages conflicts with the given conflicts requirement.
-conflictIsMet :: F.Foldable f => Repository -> Conflicts -> f PackageId -> Bool
+conflictIsMet :: Repository -> Conflicts -> Set PackageId -> Bool
 conflictIsMet r cs ps = not (F.null (fromConflicts cs))
                      && dependencyIsMet r (conflictsToDependencies cs) ps
 
@@ -416,9 +434,26 @@ instance Show VersionCmp where
                  VGTE -> ">="
 
 
+instance Hashable VersionCmp where
+    hashWithSalt n = hashWithSalt n . toInt
+      where toInt :: VersionCmp -> Int
+            toInt VLTE = 0
+            toInt VLT  = 1
+            toInt VEQ  = 2
+            toInt VGTE = 3
+            toInt VGT  = 4
+
+
 data VersionMatch = VersionMatch PackageName VersionCmp Version
                   | VersionMatchWild PackageName
                     deriving (Eq, Ord)
+
+
+instance Hashable VersionMatch where
+    hashWithSalt n = hashWithSalt n . versionMatchToStandardTypes
+      where versionMatchToStandardTypes (VersionMatch pn vc v) = (pn, Just (vc, v))
+            versionMatchToStandardTypes (VersionMatchWild pn)  = (pn, Nothing)
+
 
 
 instance Show VersionMatch where

@@ -5,6 +5,7 @@ module Data.Depsolver.Repository
     , mkRepository
     , emptyRepository
     , repoPackages
+    , repoPackageIds
     , lookupPackage
     , getPackagesThatSatisfy
 

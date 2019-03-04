@@ -47,6 +47,7 @@ import QuickCheck.GenT (liftGen)
 
 import Control.Monad.IO.Class (MonadIO, liftIO)
 import Control.Monad.State (MonadState, State, get, modify, runState, state, lift)
+import qualified Data.HashSet as Set
 import Data.List (foldl', intersperse)
 import Data.Maybe (fromJust)
 import System.FilePath ((</>))
@@ -406,18 +407,18 @@ instance Arbitrary RI.Size where
 
 
 instance Arbitrary RI.Dependencies where
-    arbitrary = fmap RI.mkDependencies' arbitrary
-    shrink = fmap RI.mkDependencies' . shrink . RI.fromDependencies
+    arbitrary = fmap RI.mkDependencies arbitrary
+    shrink = fmap RI.mkDependencies . shrink . RI.dependenciesAsList
 
 
 instance Arbitrary RI.Conflicts where
-    arbitrary = fmap RI.mkConflicts' arbitrary
-    shrink = fmap RI.mkConflicts' . shrink . RI.fromConflicts
+    arbitrary = fmap RI.mkConflicts arbitrary
+    shrink = fmap RI.mkConflicts . shrink . RI.conflictsToList
 
 
 instance Arbitrary RI.RepoState where
     arbitrary = fmap RI.mkRepoState arbitrary
-    shrink = fmap RI.mkRepoState . shrink . RI.repoStatePackageIds
+    shrink = fmap RI.mkRepoState . shrink . Set.toList . RI.repoStatePackageIds
 
 
 -- | Create a new repository state with the given package versions.

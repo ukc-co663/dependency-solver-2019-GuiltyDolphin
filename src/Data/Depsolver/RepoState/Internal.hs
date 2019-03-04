@@ -38,7 +38,7 @@ newtype RepoState = RepoState {
 
 instance TJ.JSON RepoState where
     readJSON = fmap mkRepoState . TJ.readJSON
-    showJSON = TJ.showJSON . repoStatePackageIds
+    showJSON = TJ.showJSON . Set.toList . repoStatePackageIds
 
 
 instance Show RepoState where
@@ -60,8 +60,8 @@ emptyRepoState :: RepoState
 emptyRepoState = RepoState Set.empty
 
 
-repoStatePackageIds :: RepoState -> [PackageId]
-repoStatePackageIds = Set.toList . fromRepoState
+repoStatePackageIds :: RepoState -> Set PackageId
+repoStatePackageIds = fromRepoState
 
 
 -- | True if the state is valid given the constraints of
