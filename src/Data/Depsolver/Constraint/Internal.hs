@@ -33,6 +33,10 @@ instance Show Constraints where
     show = TJ.encodeStrict
 
 
+instance Semigroup Constraints where
+    (Constraints xs) <> (Constraints ys) = mkConstraints (xs <> ys)
+
+
 deriving instance TJ.JSON Constraints
 
 
