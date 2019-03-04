@@ -110,6 +110,46 @@ spec = do
               cstr = mkWildPositiveConstraints [p1, p2]
               cmds = [RI.mkInstall p1]
           pure (rs, cstr, (rsFinal, cmds)))
+      context "with hotswapping" $ do
+        it "([A, B>>[[C,A]], C>>[[A,B]]], [A, B], [+B, +C, -A]) ==> ([B,C], [+C,-A])" $
+          checkSolver (do
+            (a, b, c) <- gen3packages
+            makeDependencies b [[c, a]]
+            makeDependencies c [[a, b]]
+
+            -- essentially, this tests that we don't care about
+            -- how dependencies are satisfied, as long as packages
+            -- in the state have all of their dependencies satisfied
+            -- after each command. This allows for hotswapping: installing
+            -- a package by first installing a particular dependency, but then
+            -- later uninstalling that package, as a series of commands have led
+            -- to the dependency being satisfied regardless
+            let rsStart = repoStateWithPackages [a, b]
+                rsFinal = repoStateWithPackages [b, c]
+                cstr = mkEqPositiveConstraints  [b, c] <> mkEqNegativeConstraints [a]
+                cmds = [ RI.mkInstall c
+                       , RI.mkUninstall a ]
+            pure (rsStart, cstr, (rsFinal, cmds)))
+        it "([A, B>>[[C,A]], C>>[[A,B],D], D>>B], [], [-A,+B,+C]) ==> ([B,C,D], [+A,+B,+D,+C,-A])" $
+          checkSolver (do
+            -- the repository is constructed in such a way that
+            -- a package would have to first be installed, then later
+            -- uninstalled to satisfy all the constraints
+            (a, b) <- gen2packages
+            (c, d) <- gen2packages
+            makeDependencies b [[c, a]]
+            makeDependencies c [[a, b], [d]]
+            makeDependencies d [[b]]
+
+            let rsStart = emptyRepoState
+                rsFinal = repoStateWithPackages [b, c, d]
+                cstr = mkEqNegativeConstraints [a] <> mkEqPositiveConstraints [b, c]
+                cmds = [ RI.mkInstall a
+                       , RI.mkInstall b
+                       , RI.mkInstall d
+                       , RI.mkInstall c
+                       , RI.mkUninstall a ]
+            pure (rsStart, cstr, (rsFinal, cmds)))
     context "with unsatisfiable constraints" $ do
       it "([A~A], [], [+A]) ==> Nothing" $
         checkSolverInvalid (do
@@ -148,3 +188,7 @@ spec = do
             mkPositiveEqConstraint pid =
                 let (pn, pv) = RI.getPackageId pid
                 in RI.mkPositiveConstraint $ RI.mkDependency pn RI.VEQ pv
+            mkEqNegativeConstraints = RI.mkConstraints . fmap mkNegativeEqConstraint
+            mkNegativeEqConstraint pid =
+                let (pn, pv) = RI.getPackageId pid
+                in RI.mkNegativeConstraint $ RI.mkDependency pn RI.VEQ pv

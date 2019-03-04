@@ -99,12 +99,7 @@ solveRec r cstrs unconsumed (currCost, cmdsAcc) rs =
           -- (so we would likely never choose them)
           commandCost (Install v) = maybe maxBound packageSize $ lookupPackage v r
           commandCost Uninstall{} = uninstallCost
-          inverseCommand (Install v) = Uninstall v
-          inverseCommand (Uninstall v) = Install v
-          deleteCmdSet c cmds =
-              let inverse = inverseCommand c
-                  wout = delete c cmds
-              in delete inverse wout
+          deleteCmdSet c cmds = delete c cmds
 
 
 -- | Given a repository, a set of constraints, and an initial state,

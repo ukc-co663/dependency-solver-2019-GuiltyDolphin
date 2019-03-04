@@ -77,6 +77,15 @@ spec = do
                                      (p1, p2, p3) <- gen3packages
                                      makeDependencies p1 [[p2, p3]]
                                      pure (p1, p2)) repoStateWithPackages2
+                 it "B~A, C>>[[D,A]], D>>[[A,C],E], E>>C, [B,C,D,E]" $
+                    propStateValid (do
+                                     (a, b, c) <- gen3packages
+                                     (d, e) <- gen2packages
+                                     makeConflict b a
+                                     makeDependencies c [[d, a]]
+                                     makeDependencies d [[a, c], [e]]
+                                     makeDependencies e [[c]]
+                                     pure (b, c, d, e)) repoStateWithPackages4
                  context "with cyclic dependencies" $ do
                    -- we don't care about how the dependencies came to be satisfied, only that they presently are
                    it "A>>B, B>>A, [A, B]" $
@@ -157,6 +166,7 @@ spec = do
             repoStateWithPackages1  p1          = pure $ repoStateWithPackages [p1]
             repoStateWithPackages2 (p1, p2)     = pure $ repoStateWithPackages [p1, p2]
             repoStateWithPackages3 (p1, p2, p3) = pure $ repoStateWithPackages [p1, p2, p3]
+            repoStateWithPackages4 (p1, p2, p3, p4) = pure $ repoStateWithPackages [p1, p2, p3, p4]
 
             genNewWildConflict = with2NewPackages (uncurry makeWildConflict)
             genNewConflict     = with2NewPackages (uncurry makeConflict)
