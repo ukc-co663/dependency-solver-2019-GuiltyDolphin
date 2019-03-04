@@ -53,6 +53,9 @@ module Data.Depsolver.Repository
     , lookupPackage'
     , repoPackageIds
     , packageSize'
+    , packageDependencies'
+    , packageConflicts'
+    , deletePackage
     , CompiledConflicts
     , CompiledDependencies
     , CompiledRepository

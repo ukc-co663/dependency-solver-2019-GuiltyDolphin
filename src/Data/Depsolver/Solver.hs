@@ -81,13 +81,21 @@ uninstallCost :: Cost
 uninstallCost = 1000000
 
 
+setCatMaybes :: (Eq a, Hashable a) => Set (Maybe a) -> Set a
+setCatMaybes = Set.foldr (\x xs -> maybe xs (`Set.insert`xs) x) Set.empty
+
+
+concatSet :: (Eq a, Hashable a) => Set (Set a) -> Set a
+concatSet = Set.foldr (\s a -> Set.union s a) Set.empty
+
+
 solveRec :: CompiledRepository -> CompiledConstraints -> (Set Command, Set RepoState) -> (Cost, [Command]) -> RepoState -> Maybe (Cost, RepoState, [Command])
 solveRec _ cstrs (cs, _) (currCost, cmdsAcc) rs | Set.null cs
     = if satisfiesConstraints rs cstrs then pure (currCost, rs, cmdsAcc) else Nothing
 solveRec r cstrs (unconsumed, seenStates) (currCost, cmdsAcc) rs =
     if satisfiesConstraints rs cstrs then pure (currCost, rs, cmdsAcc) else
         let nextSolns = maybe Set.empty
-                        (Set.foldr (\x xs -> maybe xs (`Set.insert`xs) x) Set.empty . Set.map
+                        (setCatMaybes . Set.map
                                 (\(c, s, cmd) -> solveRec r cstrs (deleteCmdSet cmd unconsumed, newSeenStates)
                                                    (currCost + c, cmd:cmdsAcc) s)) nextValidStates
         in if Set.null nextSolns then Nothing else Just (cheapest nextSolns)
@@ -131,9 +139,20 @@ solve r cstrs rs = fmap (\(c, s, cs) -> (c, s, reverse cs)) $ solveRec r' cstrs'
 -- | Attempt to minimise a problem, and reduce to a normal form.
 compileProblem :: Repository -> Constraints -> RepoState -> (CompiledRepository, CompiledConstraints)
 compileProblem r c _ =
-    let compiledRepo = compileRepository r
+    let r' = compileRepository r
         (deps, conflicts) = compileConstraintsToPackageConstraints r c
-    in (compiledRepo, (deps, conflicts))
+        mightBeInSolutionDirectly = depsToFlatPackageIds deps
+        mightBeInSolutionIndirectly =
+            let fromDeps = depsToFlatPackageIds .
+                           concatSet . Set.map packageDependencies' . setCatMaybes
+                                         $ (Set.map (`lookupPackage'`r')) mightBeInSolutionDirectly
+                fromConflicts = conflicts
+            in Set.union fromDeps fromConflicts
+        wontBeInSolution =
+            Set.difference (repoPackageIds r')
+                   (Set.union mightBeInSolutionIndirectly mightBeInSolutionDirectly)
+        r'' = foldr deletePackage r' wontBeInSolution
+    in (r'', (deps, conflicts))
 
 
 satisfiesConstraints :: RepoState -> CompiledConstraints -> Bool

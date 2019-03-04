@@ -59,6 +59,9 @@ module Data.Depsolver.Repository.Internal
     , lookupPackage'
     , repoPackageIds
     , packageSize'
+    , packageDependencies'
+    , packageConflicts'
+    , deletePackage
     , CompiledConflicts
     , CompiledDependencies
     , CompiledRepository
@@ -507,6 +510,14 @@ packageSize' :: CompiledPackage -> Size
 packageSize' (s,_,_) = s
 
 
+packageDependencies' :: CompiledPackage -> CompiledDependencies
+packageDependencies' (_,d,_) = d
+
+
+packageConflicts' :: CompiledPackage -> CompiledConflicts
+packageConflicts' (_,_,c) = c
+
+
 depsToFlatPackageIds :: CompiledDependencies -> Set PackageId
 depsToFlatPackageIds = concatSet
 
@@ -517,6 +528,10 @@ lookupPackage' pid r = M.lookup pid (fst r)
 
 repoPackageIds :: CompiledRepository -> Set PackageId
 repoPackageIds = snd
+
+
+deletePackage :: PackageId -> CompiledRepository -> CompiledRepository
+deletePackage pid (h,s) = (M.delete pid h, Set.delete pid s)
 
 
 -- | Compile a set of dependencies such that the following properties are met:
