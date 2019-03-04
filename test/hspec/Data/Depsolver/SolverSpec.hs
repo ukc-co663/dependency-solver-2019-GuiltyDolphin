@@ -96,6 +96,16 @@ spec = do
               cstr = mkEqPositiveConstraints [p1]
               cmds = [RI.mkInstall p2, RI.mkInstall p1]
           pure (rs, cstr, (rsFinal, cmds)))
+      it "([A>>B, B>>C], [], [+A]) ==> ([A, B, C], [+C, +B, +A])" $
+        checkSolver (do
+          (p1, p2, p3) <- gen3packages
+          makeDependencies p1 [[p2]]
+          makeDependencies p2 [[p3]]
+          let rs = emptyRepoState
+              rsFinal = repoStateWithPackages [p1, p2, p3]
+              cstr = mkEqPositiveConstraints [p1]
+              cmds = [RI.mkInstall p3, RI.mkInstall p2, RI.mkInstall p1]
+          pure (rs, cstr, (rsFinal, cmds)))
       it "([A=x@n, A=y@m], [], [+A]), n<m ==> ([A=x], [+A=x])" $
         checkSolver (do
           p1 <- genNewPackage

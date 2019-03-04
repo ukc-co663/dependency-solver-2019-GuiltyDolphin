@@ -138,16 +138,22 @@ solve r cstrs rs = fmap (\(c, s, cs) -> (c, s, reverse cs)) $ solveRec r' cstrs'
 
 -- | Attempt to minimise a problem, and reduce to a normal form.
 compileProblem :: Repository -> Constraints -> RepoState -> (CompiledRepository, CompiledConstraints)
-compileProblem r c _ =
+compileProblem r c rs =
     let r' = compileRepository r
         (deps, conflicts) = compileConstraintsToPackageConstraints r c
         mightBeInSolutionDirectly = depsToFlatPackageIds deps
+        getFlatDepsRec seen p =
+            let pdeps = depsToFlatPackageIds $ packageDependencies' p
+            in if Set.null pdeps then pdeps
+               else let packs = Set.filter (not . (`Set.member`seen)) $ setCatMaybes (Set.map (`lookupPackage'`r') pdeps)
+                    in Set.union pdeps (concatSet $ Set.map (getFlatDepsRec (Set.union seen packs)) packs)
+        getFlatDeps = getFlatDepsRec Set.empty
         mightBeInSolutionIndirectly =
-            let fromDeps = depsToFlatPackageIds .
-                           concatSet . Set.map packageDependencies' . setCatMaybes
+            let fromDeps = concatSet . Set.map getFlatDeps . setCatMaybes
                                          $ (Set.map (`lookupPackage'`r')) mightBeInSolutionDirectly
                 fromConflicts = conflicts
-            in Set.union fromDeps fromConflicts
+                fromRepoState = repoStatePackageIds rs
+            in Set.union (Set.union fromDeps fromConflicts) fromRepoState
         wontBeInSolution =
             Set.difference (repoPackageIds r')
                    (Set.union mightBeInSolutionIndirectly mightBeInSolutionDirectly)
