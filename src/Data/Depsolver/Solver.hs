@@ -11,6 +11,7 @@ module Data.Depsolver.Solver
 
 import qualified Data.Foldable as F
 import Data.Function (on)
+import qualified Data.HashSet as Set
 import Data.List ((\\), delete)
 import Data.Maybe (catMaybes)
 
@@ -69,21 +70,23 @@ uninstallCost :: Cost
 uninstallCost = 1000000
 
 
-solveRec :: Repository -> Constraints -> [Command] -> (Cost, [Command]) -> RepoState -> Maybe (Cost, RepoState, [Command])
-solveRec r cstrs [] (currCost, cmdsAcc) rs =
+solveRec :: Repository -> Constraints -> ([Command], Set.HashSet RepoState) -> (Cost, [Command]) -> RepoState -> Maybe (Cost, RepoState, [Command])
+solveRec r cstrs ([], _) (currCost, cmdsAcc) rs =
     if satisfiesConstraints r rs cstrs then pure (currCost, rs, cmdsAcc) else Nothing
-solveRec r cstrs unconsumed (currCost, cmdsAcc) rs =
+solveRec r cstrs (unconsumed, seenStates) (currCost, cmdsAcc) rs =
     if satisfiesConstraints r rs cstrs then pure (currCost, rs, cmdsAcc) else
         let nextSolns = maybe []
-                        (catMaybes . fmap (\(c, s, cmd) -> solveRec r cstrs (deleteCmdSet cmd unconsumed)
+                        (catMaybes . fmap (\(c, s, cmd) -> solveRec r cstrs (deleteCmdSet cmd unconsumed, newSeenStates)
                                            (currCost + c, cmd:cmdsAcc) s)) nextValidStates
         in case nextSolns of
              [] -> Nothing
              solns -> Just $ cheapest solns
-    where nextValidStates = case validNextCommands of
+    where nextValidStates = case validNextCommandsAndStates of
                               [] -> Nothing
-                              cmds -> pure $ fmap (\c -> (commandCost c, runCommand c rs, c)) cmds
-          validNextCommands = filter (\c -> validState r (runCommand c rs)) sensibleNextCommands
+                              cmds -> pure $ fmap (\(c,s) -> (commandCost c, s, c)) cmds
+          validNextCommandsAndStates = filter (\(_,s) -> not (Set.member s seenStates) && validState r s)
+                                       $ fmap (\c -> (c, runCommand c rs)) sensibleNextCommands
+          newSeenStates = Set.union (Set.fromList $ fmap snd validNextCommandsAndStates) seenStates
           sensibleNextCommands = (unconsumed \\ installedCommands) \\ uninstalledCommands
           -- commands that would install already-installed packages
           installedCommands = fmap mkInstall $ spids
@@ -109,7 +112,7 @@ solveRec r cstrs unconsumed (currCost, cmdsAcc) rs =
 -- | If the constraints cannot be satisfied with a valid state, then this
 -- | returns Nothing.
 solve :: Repository -> Constraints -> RepoState -> Maybe (RepoState, [Command])
-solve r cstrs = fmap (\(_, s, cs) -> (s, reverse cs)) . solveRec r cstrs allCommands (0, [])
+solve r cstrs rs = fmap (\(_, s, cs) -> (s, reverse cs)) $ solveRec r cstrs (allCommands, Set.singleton rs) (0, []) rs
     where allCommands = fmap mkInstall pids <> fmap mkUninstall pids
           pids = fmap packageId $ repoPackages r
 

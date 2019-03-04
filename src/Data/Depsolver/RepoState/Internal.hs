@@ -18,6 +18,7 @@ module Data.Depsolver.RepoState.Internal
     ) where
 
 
+import Data.Hashable (Hashable)
 import qualified Data.HashSet as Set
 
 import qualified Text.JSON as TJ
@@ -32,7 +33,7 @@ type Set = Set.HashSet
 newtype RepoState = RepoState {
       -- ^ Packages and their installed version.
       fromRepoState :: Set PackageId
-    } deriving (Eq)
+    } deriving (Eq, Hashable)
 
 
 instance TJ.JSON RepoState where
