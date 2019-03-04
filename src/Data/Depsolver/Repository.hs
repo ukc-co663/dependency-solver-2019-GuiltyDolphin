@@ -5,7 +5,6 @@ module Data.Depsolver.Repository
     , mkRepository
     , emptyRepository
     , repoPackages
-    , repoPackageIds
     , lookupPackage
     , getPackagesThatSatisfy
 
@@ -50,6 +49,13 @@ module Data.Depsolver.Repository
     , compileConflicts
     , compileDependencies
     , compileRepository
+    , depsToFlatPackageIds
+    , lookupPackage'
+    , repoPackageIds
+    , packageSize'
+    , CompiledConflicts
+    , CompiledDependencies
+    , CompiledRepository
     ) where
 
 

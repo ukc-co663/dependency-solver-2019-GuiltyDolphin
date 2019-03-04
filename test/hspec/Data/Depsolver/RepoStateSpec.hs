@@ -37,22 +37,22 @@ spec = do
          it "example valid states are valid" $
             mapM_ (\er -> do
                    let er' = getExampleRepo er
-                   mapM_ (\es -> (er', es) `shouldSatisfy` uncurry validState) (getExampleValidStates er))
+                   mapM_ (\es -> (er', es) `shouldSatisfy` validState') (getExampleValidStates er))
                           repoExamples
   describe "fileCases" $ do
          describe "example valid states are valid" $
                   runIO fileCaseExamples >>=
                         mapM_ (\(dir, (repo, repoState, _))
-                                   -> it dir (validState repo repoState `shouldBe` True))
+                                   -> it dir (validState' (repo, repoState) `shouldBe` True))
   describe "validState" $ do
          it "the empty state is valid for any repository" $
-            property (\repo -> validState repo RI.emptyRepoState)
+            property (\repo -> validState' (repo, RI.emptyRepoState))
          it "the empty repository is not valid with any non-empty state" $
-            property (\repoState -> repoState /= RI.emptyRepoState ==> not (validState RI.emptyRepository repoState))
+            property (\repoState -> repoState /= RI.emptyRepoState ==> notValidState (RI.emptyRepository, repoState))
          it "simple case: package with same name but different version in state" $
             let repo = RI.mkRepository [RI.mkPackage (RI.mkPackageName "A") (RI.mkVersion ["1"]) (RI.mkSize 1) [] []]
                 repoState = RI.mkRepoState [RI.mkPackageId (RI.mkPackageName "A") (RI.mkVersion ["2"])]
-            in (repo, repoState) `shouldNotSatisfy` uncurry validState
+            in (repo, repoState) `shouldNotSatisfy` validState'
          it "a state is not valid if it contains a package that is not in the repository" $
             propStateInvalid withoutPackage repoStateWithPackages1
          context "all dependencies met" $ do
@@ -156,7 +156,7 @@ spec = do
                                -> RepoGen a -> (a -> RepoGen RepoState) -> Property
             checkRepoWithState p rg rsg = forAll (runRepoGen (rg >>= rsg)) p
 
-            validState'   = uncurry validState
+            validState'   = uncurry (validState . RI.compileRepository)
             notValidState = not . validState'
 
             propStateValid, propStateInvalid :: RepoGen a -> (a -> RepoGen RepoState) -> Property

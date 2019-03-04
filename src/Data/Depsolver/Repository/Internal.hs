@@ -55,6 +55,13 @@ module Data.Depsolver.Repository.Internal
     , compileConflicts
     , compileDependencies
     , compileRepository
+    , depsToFlatPackageIds
+    , lookupPackage'
+    , repoPackageIds
+    , packageSize'
+    , CompiledConflicts
+    , CompiledDependencies
+    , CompiledRepository
 
     -- ** Parser helpers
     , parseDependency
@@ -90,17 +97,11 @@ type PackageMap = M.HashMap PackageName (M.HashMap Version PackageDesc)
 data Repository = Repository {
       -- ^ Available packages in the repository.
       fromRepository :: PackageMap
-      -- ^ Quick access to package Ids
-    , repoPackageIds :: Set PackageId
     } deriving (Eq)
 
 
 repoPackages :: Repository -> [PackageDesc]
 repoPackages = mapOp (M.foldr (\vmap packs -> packs <> M.elems vmap) [])
-
-
-mapPackages :: (PackageDesc -> PackageDesc) -> Repository -> Repository
-mapPackages f = mkRepository . fmap f . repoPackages
 
 
 instance TJ.JSON Repository where
@@ -115,19 +116,18 @@ instance Show Repository where
 -- | Create a new repository with the given package descriptions.
 mkRepository :: [PackageDesc] -> Repository
 mkRepository pvs =
-    uncurry (flip Repository) $ foldr insertPackage' (Set.empty, M.empty) pvs
-    where insertPackage' p (pids,m) =
+    Repository $ foldr insertPackage' M.empty pvs
+    where insertPackage' p m =
               let n = packageName p
                   v = packageVersion p
                   vmap = M.lookupDefault M.empty n m
                   vmap' = M.insert v p vmap
-                  pids' = Set.insert (mkPackageId n v) pids
-              in (pids', M.insert n vmap' m)
+              in M.insert n vmap' m
 
 
 -- | Repository with no packages.
 emptyRepository :: Repository
-emptyRepository = Repository M.empty Set.empty
+emptyRepository = Repository M.empty
 
 
 mapOp :: (PackageMap -> a) -> Repository -> a
@@ -156,13 +156,6 @@ getPackagesThatSatisfy r (VersionMatch pname cmp version) = do
 
 getPackageAnyVersion :: Repository -> PackageName -> Maybe [PackageDesc]
 getPackageAnyVersion r pn = mapOp (fmap M.elems . M.lookup pn) r
-
-
-compileRepository :: Repository -> Repository
-compileRepository r = mapPackages compilePackage r
-    where compilePackage p = p { packageDependencies = compileDependencies r (packageDependencies p)
-                               , packageConflicts    = compileConflicts    r (packageConflicts p) }
-
 
 
 newtype PackageName = PackageName { getPackageName :: String }
@@ -281,7 +274,7 @@ mkVersion vs = Version vs (canonicalVersionString vs)
 
 
 -- | A package size (a postive integer).
-newtype Size = Size { fromSize :: Int } deriving (Bounded, Eq, Hashable, Num, Ord)
+newtype Size = Size { fromSize :: Int } deriving (Bounded, Eq, Hashable, Num, Ord, Show)
 
 
 deriving instance TJ.JSON Size
@@ -323,30 +316,6 @@ emptyDependencies :: Dependencies
 emptyDependencies = mkDependencies []
 
 
--- | True if a list of packages satisfies the dependencies for some repository.
-dependencyIsMet :: Repository -> Dependencies -> Set PackageId -> Bool
-dependencyIsMet r deps pvs =
-    let depSet = fromDependencies deps
-    in F.null depSet || F.all meetsDependency depSet
-    where meetsDependency =
-              any (maybe False pvsHasAnyOf . fmap (fmap packageId) . getPackagesThatSatisfy r)
-          pvsHasAnyOf = F.any (`Set.member` pvs)
-
-
--- | Compile a set of dependencies such that the following properties are met:
--- |
--- | - all references to packages are in the form 'x=n'
-compileDependencies :: Repository -> Dependencies -> Dependencies
-compileDependencies r deps =
-    let expanded = mapDependencies expandDependencies deps
-    in expanded
-    where expandDependencies = Set.map expandOredDependencies
-          expandOredDependencies = Set.fromList . concat . Set.map expandOredDependency
-          expandOredDependency = maybe [] (fmap toPackageMatch) . getPackagesThatSatisfy r
-          mapDependencies f = mkDependencies' . f . fromDependencies
-          toPackageMatch p = mkDependency (packageName p) VEQ (packageVersion p)
-
-
 -- | Package conflicts.
 newtype Conflicts = Conflicts { fromConflicts :: Set VersionMatch }
     deriving (Eq, Semigroup, Show)
@@ -375,29 +344,6 @@ conflictsToList = Set.toList . fromConflicts
 -- | The empty set of conflicts.
 emptyConflicts :: Conflicts
 emptyConflicts = mkConflicts []
-
-
-conflictsToDependencies :: Conflicts -> Dependencies
-conflictsToDependencies = Dependencies . Set.map Set.singleton . fromConflicts
-
-
--- | True if a list of packages conflicts with the given conflicts requirement.
-conflictIsMet :: Repository -> Conflicts -> Set PackageId -> Bool
-conflictIsMet r cs ps = not (F.null (fromConflicts cs))
-                     && dependencyIsMet r (conflictsToDependencies cs) ps
-
-
--- | Compile a set of conflicts such that the following properties are met:
--- |
--- | - all references to packages are in the form 'x=n'
-compileConflicts :: Repository -> Conflicts -> Conflicts
-compileConflicts r deps =
-    let expanded = mapConflicts expandConflicts deps
-    in expanded
-    where expandConflicts = Set.fromList . concat . Set.map expandConflict
-          expandConflict = maybe [] (fmap toPackageMatch) . getPackagesThatSatisfy r
-          mapConflicts f = mkConflicts' . f . fromConflicts
-          toPackageMatch p = mkDependency (packageName p) VEQ (packageVersion p)
 
 
 data PackageDesc = PackageDesc {
@@ -539,3 +485,76 @@ mkDependency = VersionMatch
 
 mkWildcardDependency :: PackageName -> VersionMatch
 mkWildcardDependency = VersionMatchWild
+
+
+-------------------------
+----- Compiled Data -----
+-------------------------
+
+
+type CompiledVersionMatch = PackageId
+type CompiledDependencies = Set (Set CompiledVersionMatch)
+type CompiledConflicts    = Set CompiledVersionMatch
+type CompiledPackage      = (Size, CompiledDependencies, CompiledConflicts)
+type CompiledRepository   = (M.HashMap PackageId CompiledPackage, Set PackageId)
+
+
+concatSet :: (Eq a, Hashable a) => Set (Set a) -> Set a
+concatSet = Set.foldr (\s a -> Set.union s a) Set.empty
+
+
+packageSize' :: CompiledPackage -> Size
+packageSize' (s,_,_) = s
+
+
+depsToFlatPackageIds :: CompiledDependencies -> Set PackageId
+depsToFlatPackageIds = concatSet
+
+
+lookupPackage' :: PackageId -> CompiledRepository -> Maybe CompiledPackage
+lookupPackage' pid r = M.lookup pid (fst r)
+
+
+repoPackageIds :: CompiledRepository -> Set PackageId
+repoPackageIds = snd
+
+
+-- | Compile a set of dependencies such that the following properties are met:
+-- |
+-- | - all references to packages are in the form 'x=n'
+compileDependencies :: Repository -> Dependencies -> CompiledDependencies
+compileDependencies r deps = expandDependencies (fromDependencies deps)
+    where expandDependencies = Set.map expandOredDependencies
+          expandOredDependencies = Set.fromList . concat . Set.map expandOredDependency
+          expandOredDependency = maybe [] (fmap packageId) . getPackagesThatSatisfy r
+
+
+-- | Compile a set of conflicts such that the following properties are met:
+-- |
+-- | - all references to packages are in the form 'x=n'
+compileConflicts :: Repository -> Conflicts -> CompiledConflicts
+compileConflicts r deps = expandConflicts (fromConflicts deps)
+    where expandConflicts = Set.fromList . concat . Set.map expandConflict
+          expandConflict = maybe [] (fmap packageId) . getPackagesThatSatisfy r
+
+
+compileRepository :: Repository -> CompiledRepository
+compileRepository r =
+    let hmap = foldr (\p acc -> let p' = compilePackage p in M.insert (packageId p) p' acc)
+                 M.empty (repoPackages r)
+    in (hmap, Set.fromList $ M.keys hmap)
+    where compilePackage p =
+              let deps' = compileDependencies r (packageDependencies p)
+                  conflicts' = compileConflicts r (packageConflicts p)
+              in (packageSize p, deps', conflicts')
+
+
+-- | True if a list of packages satisfies the dependencies for some repository.
+dependencyIsMet :: CompiledDependencies -> Set PackageId -> Bool
+dependencyIsMet deps pvs =
+    F.null deps || F.all (F.any (`Set.member` pvs)) deps
+
+
+-- | True if a list of packages conflicts with the given conflicts requirement.
+conflictIsMet :: CompiledConflicts -> Set PackageId -> Bool
+conflictIsMet cs ps = not (F.null cs) && dependencyIsMet (Set.singleton cs) ps

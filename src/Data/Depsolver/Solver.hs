@@ -25,7 +25,7 @@ import Data.Depsolver.Repository.Internal (wantString)
 type Set = Set.HashSet
 
 
-type CompiledConstraints = (Dependencies, Conflicts)
+type CompiledConstraints = (CompiledDependencies, CompiledConflicts)
 
 
 -- | A command to manipulate the repository state.
@@ -81,11 +81,11 @@ uninstallCost :: Cost
 uninstallCost = 1000000
 
 
-solveRec :: Repository -> CompiledConstraints -> (Set Command, Set RepoState) -> (Cost, [Command]) -> RepoState -> Maybe (Cost, RepoState, [Command])
-solveRec r cstrs (cs, _) (currCost, cmdsAcc) rs | Set.null cs
-    = if satisfiesConstraints r rs cstrs then pure (currCost, rs, cmdsAcc) else Nothing
+solveRec :: CompiledRepository -> CompiledConstraints -> (Set Command, Set RepoState) -> (Cost, [Command]) -> RepoState -> Maybe (Cost, RepoState, [Command])
+solveRec _ cstrs (cs, _) (currCost, cmdsAcc) rs | Set.null cs
+    = if satisfiesConstraints rs cstrs then pure (currCost, rs, cmdsAcc) else Nothing
 solveRec r cstrs (unconsumed, seenStates) (currCost, cmdsAcc) rs =
-    if satisfiesConstraints r rs cstrs then pure (currCost, rs, cmdsAcc) else
+    if satisfiesConstraints rs cstrs then pure (currCost, rs, cmdsAcc) else
         let nextSolns = maybe Set.empty
                         (Set.foldr (\x xs -> maybe xs (`Set.insert`xs) x) Set.empty . Set.map
                                 (\(c, s, cmd) -> solveRec r cstrs (deleteCmdSet cmd unconsumed, newSeenStates)
@@ -110,7 +110,7 @@ solveRec r cstrs (unconsumed, seenStates) (currCost, cmdsAcc) rs =
           fst3 (x,_,_) = x
           -- use 'maxBound' as a guard against invalid operations
           -- (so we would likely never choose them)
-          commandCost (Install v) = maybe maxBound packageSize $ lookupPackage v r
+          commandCost (Install v) = maybe maxBound packageSize' $ lookupPackage' v r
           commandCost Uninstall{} = uninstallCost
           deleteCmdSet c cmds = Set.delete c cmds
 
@@ -122,20 +122,20 @@ solveRec r cstrs (unconsumed, seenStates) (currCost, cmdsAcc) rs =
 -- | If the constraints cannot be satisfied with a valid state, then this
 -- | returns Nothing.
 solve :: Repository -> Constraints -> RepoState -> Maybe (RepoState, [Command])
-solve r cstrs rs = fmap (\(c, s, cs) -> (c, s, reverse cs)) $ solveRec r' cstrs' (allCommands, Set.singleton rs') (0, []) rs'
+solve r cstrs rs = fmap (\(c, s, cs) -> (c, s, reverse cs)) $ solveRec r' cstrs' (allCommands, Set.singleton rs) (0, []) rs
     where allCommands = Set.map mkInstall pids <> Set.map mkUninstall pids
-          pids = repoPackageIds r
-          (r', cstrs', rs') = compileProblem r cstrs rs
+          pids = repoPackageIds r'
+          (r', cstrs') = compileProblem r cstrs rs
 
 
 -- | Attempt to minimise a problem, and reduce to a normal form.
-compileProblem :: Repository -> Constraints -> RepoState -> (Repository, CompiledConstraints, RepoState)
-compileProblem r c rs =
+compileProblem :: Repository -> Constraints -> RepoState -> (CompiledRepository, CompiledConstraints)
+compileProblem r c _ =
     let compiledRepo = compileRepository r
         (deps, conflicts) = compileConstraintsToPackageConstraints r c
-    in (compiledRepo, (deps, conflicts), rs)
+    in (compiledRepo, (deps, conflicts))
 
 
-satisfiesConstraints :: Repository -> RepoState -> CompiledConstraints -> Bool
-satisfiesConstraints r rs (deps, conflicts) =
-    stateMeetsConstraints r rs deps conflicts
+satisfiesConstraints :: RepoState -> CompiledConstraints -> Bool
+satisfiesConstraints rs (deps, conflicts) =
+    stateMeetsConstraints rs deps conflicts

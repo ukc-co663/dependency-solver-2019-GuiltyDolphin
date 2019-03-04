@@ -66,18 +66,18 @@ repoStatePackageIds = fromRepoState
 
 -- | True if the state is valid given the constraints of
 -- | the repository.
-validState :: Repository -> RepoState -> Bool
+validState :: CompiledRepository -> RepoState -> Bool
 validState r rs = all meetsPackageDependencies . repoStatePackageIds $ rs
     where meetsPackageDependencies pv =
-              maybe False (\p -> stateMeetsConstraints r rs (packageDependencies p) (packageConflicts p)) (lookupPackage pv r)
+              maybe False (\(_,deps,cflcts) -> stateMeetsConstraints rs deps cflcts) (lookupPackage' pv r)
 
 
 -- | True if the state is valid for the given dependencies and conflicts.
-stateMeetsConstraints :: Repository -> RepoState -> Dependencies -> Conflicts -> Bool
-stateMeetsConstraints r rs dependencies conflicts =
+stateMeetsConstraints :: RepoState -> CompiledDependencies -> CompiledConflicts -> Bool
+stateMeetsConstraints rs dependencies conflicts =
     let pids = repoStatePackageIds rs
-    in dependencyIsMet r dependencies pids
-       && not (conflictIsMet r conflicts pids)
+    in dependencyIsMet dependencies pids
+       && not (conflictIsMet conflicts pids)
 
 
 modifyAsSet :: (Set PackageId -> Set PackageId) -> RepoState -> RepoState
