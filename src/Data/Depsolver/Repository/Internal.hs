@@ -51,6 +51,11 @@ module Data.Depsolver.Repository.Internal
     , toVersionList
     , parseVersion
 
+    -- ** Compiling
+    , compileConflicts
+    , compileDependencies
+    , compileRepository
+
     -- ** Parser helpers
     , parseDependency
     , wantString
@@ -92,6 +97,10 @@ data Repository = Repository {
 
 repoPackages :: Repository -> [PackageDesc]
 repoPackages = mapOp (M.foldr (\vmap packs -> packs <> M.elems vmap) [])
+
+
+mapPackages :: (PackageDesc -> PackageDesc) -> Repository -> Repository
+mapPackages f = mkRepository . fmap f . repoPackages
 
 
 instance TJ.JSON Repository where
@@ -147,6 +156,13 @@ getPackagesThatSatisfy r (VersionMatch pname cmp version) = do
 
 getPackageAnyVersion :: Repository -> PackageName -> Maybe [PackageDesc]
 getPackageAnyVersion r pn = mapOp (fmap M.elems . M.lookup pn) r
+
+
+compileRepository :: Repository -> Repository
+compileRepository r = mapPackages compilePackage r
+    where compilePackage p = p { packageDependencies = compileDependencies r (packageDependencies p)
+                               , packageConflicts    = compileConflicts    r (packageConflicts p) }
+
 
 
 newtype PackageName = PackageName { getPackageName :: String }
@@ -317,6 +333,20 @@ dependencyIsMet r deps pvs =
           pvsHasAnyOf = F.any (`Set.member` pvs)
 
 
+-- | Compile a set of dependencies such that the following properties are met:
+-- |
+-- | - all references to packages are in the form 'x=n'
+compileDependencies :: Repository -> Dependencies -> Dependencies
+compileDependencies r deps =
+    let expanded = mapDependencies expandDependencies deps
+    in expanded
+    where expandDependencies = Set.map expandOredDependencies
+          expandOredDependencies = Set.fromList . concat . Set.map expandOredDependency
+          expandOredDependency = maybe [] (fmap toPackageMatch) . getPackagesThatSatisfy r
+          mapDependencies f = mkDependencies' . f . fromDependencies
+          toPackageMatch p = mkDependency (packageName p) VEQ (packageVersion p)
+
+
 -- | Package conflicts.
 newtype Conflicts = Conflicts { fromConflicts :: Set VersionMatch }
     deriving (Eq, Semigroup, Show)
@@ -355,6 +385,19 @@ conflictsToDependencies = Dependencies . Set.map Set.singleton . fromConflicts
 conflictIsMet :: Repository -> Conflicts -> Set PackageId -> Bool
 conflictIsMet r cs ps = not (F.null (fromConflicts cs))
                      && dependencyIsMet r (conflictsToDependencies cs) ps
+
+
+-- | Compile a set of conflicts such that the following properties are met:
+-- |
+-- | - all references to packages are in the form 'x=n'
+compileConflicts :: Repository -> Conflicts -> Conflicts
+compileConflicts r deps =
+    let expanded = mapConflicts expandConflicts deps
+    in expanded
+    where expandConflicts = Set.fromList . concat . Set.map expandConflict
+          expandConflict = maybe [] (fmap toPackageMatch) . getPackagesThatSatisfy r
+          mapConflicts f = mkConflicts' . f . fromConflicts
+          toPackageMatch p = mkDependency (packageName p) VEQ (packageVersion p)
 
 
 data PackageDesc = PackageDesc {

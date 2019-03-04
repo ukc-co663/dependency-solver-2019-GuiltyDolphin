@@ -86,12 +86,13 @@ mkNegativeConstraint = Unwanted
 
 
 -- | Compile a set of constraints to a set of dependencies and conflicts.
-compileConstraintsToPackageConstraints :: Constraints -> (Dependencies, Conflicts)
-compileConstraintsToPackageConstraints constraints =
+compileConstraintsToPackageConstraints :: Repository -> Constraints -> (Dependencies, Conflicts)
+compileConstraintsToPackageConstraints r constraints =
     let (deps1, conflicts) =
             foldr (\c acc ->
                        case c of
                          Wanted p -> first ([p]:) acc
                          Unwanted p -> second (p:) acc) ([], [])
                       (fromConstraints constraints)
-    in (mkDependencies deps1, mkConflicts conflicts)
+    in ( compileDependencies r $ mkDependencies deps1
+       , compileConflicts    r $ mkConflicts conflicts)

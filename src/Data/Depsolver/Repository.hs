@@ -45,6 +45,11 @@ module Data.Depsolver.Repository
     , Version
     , mkVersion
     , toVersionList
+
+    -- ** Compiling
+    , compileConflicts
+    , compileDependencies
+    , compileRepository
     ) where
 
 

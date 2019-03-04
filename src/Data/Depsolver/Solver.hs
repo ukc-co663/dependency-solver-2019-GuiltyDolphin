@@ -25,6 +25,9 @@ import Data.Depsolver.Repository.Internal (wantString)
 type Set = Set.HashSet
 
 
+type CompiledConstraints = (Dependencies, Conflicts)
+
+
 -- | A command to manipulate the repository state.
 data Command =
     -- | Install the given package.
@@ -78,7 +81,7 @@ uninstallCost :: Cost
 uninstallCost = 1000000
 
 
-solveRec :: Repository -> Constraints -> (Set Command, Set RepoState) -> (Cost, [Command]) -> RepoState -> Maybe (Cost, RepoState, [Command])
+solveRec :: Repository -> CompiledConstraints -> (Set Command, Set RepoState) -> (Cost, [Command]) -> RepoState -> Maybe (Cost, RepoState, [Command])
 solveRec r cstrs (cs, _) (currCost, cmdsAcc) rs | Set.null cs
     = if satisfiesConstraints r rs cstrs then pure (currCost, rs, cmdsAcc) else Nothing
 solveRec r cstrs (unconsumed, seenStates) (currCost, cmdsAcc) rs =
@@ -119,12 +122,20 @@ solveRec r cstrs (unconsumed, seenStates) (currCost, cmdsAcc) rs =
 -- | If the constraints cannot be satisfied with a valid state, then this
 -- | returns Nothing.
 solve :: Repository -> Constraints -> RepoState -> Maybe (RepoState, [Command])
-solve r cstrs rs = fmap (\(_, s, cs) -> (s, reverse cs)) $ solveRec r cstrs (allCommands, Set.singleton rs) (0, []) rs
+solve r cstrs rs = fmap (\(c, s, cs) -> (c, s, reverse cs)) $ solveRec r' cstrs' (allCommands, Set.singleton rs') (0, []) rs'
     where allCommands = Set.map mkInstall pids <> Set.map mkUninstall pids
           pids = repoPackageIds r
+          (r', cstrs', rs') = compileProblem r cstrs rs
 
 
-satisfiesConstraints :: Repository -> RepoState -> Constraints -> Bool
-satisfiesConstraints r rs cs =
-    let (deps, conflicts) = compileConstraintsToPackageConstraints cs
-    in stateMeetsConstraints r rs deps conflicts
+-- | Attempt to minimise a problem, and reduce to a normal form.
+compileProblem :: Repository -> Constraints -> RepoState -> (Repository, CompiledConstraints, RepoState)
+compileProblem r c rs =
+    let compiledRepo = compileRepository r
+        (deps, conflicts) = compileConstraintsToPackageConstraints r c
+    in (compiledRepo, (deps, conflicts), rs)
+
+
+satisfiesConstraints :: Repository -> RepoState -> CompiledConstraints -> Bool
+satisfiesConstraints r rs (deps, conflicts) =
+    stateMeetsConstraints r rs deps conflicts

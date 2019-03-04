@@ -62,14 +62,15 @@ spec :: Spec
 spec = do
   describe "satisfiesConstraints" $ do
     it "every state satisfies the empty constraints" $
-      property (\(repo, rstate) -> satisfiesConstraints repo rstate emptyConstraints)
+      property (\(repo, rstate) -> satisfiesConstraints repo rstate
+                                   (RI.compileConstraintsToPackageConstraints repo emptyConstraints))
   describe "solve" $ do
     context "with satisfiable constraints" $ do
       it "(_, S, []) ==> (S, [])" $
         property (\repo -> forAll (arbitrary `suchThat` validState repo) $
                            \rstate -> solve repo emptyConstraints rstate === Just (rstate, []))
       it "(_, S, C) when C already satisfied ==> (S, [])" $
-        property (\(repo, rstate) -> forAll (arbitrary `suchThat` satisfiesConstraints repo rstate)
+        property (\(repo, rstate) -> forAll (arbitrary `suchThat` (satisfiesConstraints repo rstate . RI.compileConstraintsToPackageConstraints repo))
                   $ \constrs -> solve repo constrs rstate === Just (rstate, []))
       it "a state resulting from solve is always a valid state (if the initial state is valid)" $
         property (\repo -> forAll (gen2 (arbitrary `suchThat` validState repo, arbyRepo repo)) $
