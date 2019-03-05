@@ -159,6 +159,8 @@ compileProblem r c rs =
         thd3 (_,_,z) = z
         mightHaveToInstallAsDependencies =
             getAllDependenciesOfSet mightHaveToInstallForConstraints
+        mightHaveToUninstallDueToConflicts =
+            getAllConflictsOfSet theOnlyThingsThatWouldEverBeInstalled
         alreadyInstalled = repoStatePackageIds rs
         theOnlyThingsThatWouldEverBeInstalled =
             Set.union alreadyInstalled
@@ -209,7 +211,8 @@ compileProblem r c rs =
           (Set.union (Set.map mkUninstall thingsThatWillDefinitelyNeedToBeUninstalled)
            (Set.union (Set.map mkInstall mightHaveToInstallForConstraints)
             (Set.union (Set.map mkInstall mightHaveToInstallAsDependencies)
-             (Set.map mkUninstall mightHaveToInstallAsDependencies))))
+             (Set.union (Set.map mkUninstall mightHaveToInstallAsDependencies)
+                 (Set.map mkUninstall mightHaveToUninstallDueToConflicts)))))
           initialCommands
         getFlatDepsRec seen p =
             let pdeps = depsToFlatPackageIds $ packageDependencies' p
