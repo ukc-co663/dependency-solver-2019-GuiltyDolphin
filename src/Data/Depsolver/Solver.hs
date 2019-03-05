@@ -148,7 +148,15 @@ compileProblem r c rs =
         getAllDependenciesOfSet packSet =
             concatSet . Set.map getFlatDeps . setCatMaybes
                           $ (Set.map (`lookupPackage'`r')) packSet
+        definiteDependencies = concatSet . Set.filter ((==1) . Set.size)
+        packagesThatMustBeInFinalState = definiteDependencies deps
+        getAllConflictsOfSet packSet =
+            concatSet . Set.map getConflicts . setCatMaybes
+                          $ (Set.map (`lookupPackage'`r')) packSet
+        getConflicts = thd3
         fst3 (x,_,_) = x
+        snd3 (_,y,_) = y
+        thd3 (_,_,z) = z
         mightHaveToInstallAsDependencies =
             getAllDependenciesOfSet mightHaveToInstallForConstraints
         alreadyInstalled = repoStatePackageIds rs
@@ -172,11 +180,28 @@ compileProblem r c rs =
           Set.intersection packagesWithNoDependants
            (Set.intersection alreadyInstalled
                thingsThatCantBeInFinalState)
-        initialCommands = Set.map mkUninstall
-          packagesWithNoDependantsThatAreAlreadyInstalledAndCannotBeInFinalState
+        packagesWithNoDependencies = Set.filter hasNoDependencies thingsThatMightBeTouchedBySolution
+        hasNoDependencies = maybe False (Set.null . snd3) . (`lookupPackage'` r')
+        packagesWithConflictors = getAllConflictsOfSet thingsThatMightBeTouchedBySolution
+        -- if a package must be in the final state, it has no dependencies,
+        -- and conflicts with nothing, then we can install it straight away
+        packagesWithNoConflictors =
+          Set.difference thingsThatMightBeTouchedBySolution packagesWithConflictors
+        packagesWithNoConflicts = Set.filter hasNoConflicts thingsThatMightBeTouchedBySolution
+        hasNoConflicts = maybe False (Set.null . thd3) . (`lookupPackage'` r')
+        packagesWithNoConflictorsOrConflicts =
+            Set.intersection packagesWithNoConflictors packagesWithNoConflicts
+        packagesWithNoConflictorsOrConflictsOrDependencies =
+            Set.intersection packagesWithNoConflictorsOrConflicts packagesWithNoDependencies
+        packagesWithNoConflictorsOrConflictsOrDependenciesThatMustBeInFinalState =
+            Set.intersection packagesWithNoConflictorsOrConflictsOrDependencies packagesThatMustBeInFinalState
+        packagesToInstallFromTheOutset = packagesWithNoConflictorsOrConflictsOrDependenciesThatMustBeInFinalState
+        packagesToUninstallFromTheOutset = packagesWithNoDependantsThatAreAlreadyInstalledAndCannotBeInFinalState
+        initialCommands =
+          Set.union
+           (Set.map mkUninstall packagesToUninstallFromTheOutset)
+           (Set.map mkInstall packagesToInstallFromTheOutset)
         -- we already uninstall these packages, so no need for us to keep them around
-        packagesUninstalledFromTheOutset = packagesWithNoDependantsThatAreAlreadyInstalledAndCannotBeInFinalState
-        r'' = foldr deletePackage r' packagesUninstalledFromTheOutset
         availableCommands = Set.difference
           (Set.union (Set.map mkUninstall thingsThatWillDefinitelyNeedToBeUninstalled)
            (Set.union (Set.map mkInstall mightHaveToInstallForConstraints)
@@ -189,13 +214,16 @@ compileProblem r c rs =
                else let packs = Set.filter (not . (`Set.member`seen)) $ setCatMaybes (Set.map (`lookupPackage'`r') pdeps)
                     in Set.union pdeps (concatSet $ Set.map (getFlatDepsRec (Set.union seen packs)) packs)
         getFlatDeps = getFlatDepsRec Set.empty
-        r''' = foldr deletePackage r'' thingsThatWontBeTouchedBySolution
-        rs' = foldr uninstallPackage rs packagesUninstalledFromTheOutset
+        r'' = foldr deletePackage r'
+          (Set.union packagesToUninstallFromTheOutset
+           thingsThatWontBeTouchedBySolution)
+        rs' = foldr installPackage (foldr uninstallPackage rs packagesToUninstallFromTheOutset)
+              packagesToInstallFromTheOutset
         initialCommands' = Set.toList initialCommands
         initialCost = sum $ fmap commandCost initialCommands'
         commandCost (Uninstall _) = uninstallCost
         commandCost (Install p) = maybe maxBound fst3 (lookupPackage' p r')
-    in (r''', (deps, conflicts), availableCommands, initialCost, initialCommands', rs')
+    in (r'', (deps, conflicts), availableCommands, initialCost, initialCommands', rs')
 
 
 satisfiesConstraints :: RepoState -> CompiledConstraints -> Bool
