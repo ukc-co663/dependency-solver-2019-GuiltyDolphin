@@ -31,6 +31,9 @@ module TestHelper
     , getExampleValidStates
     , fileCaseExamples
 
+    -- ** ArbyRepo class
+    , arbyRepo
+
     -- ** RepoGen helpers
     , with2NewPackages
     , gen2packages
