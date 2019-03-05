@@ -130,35 +130,44 @@ solveRec r cstrs (unconsumed, seenStates) (currCost, cmdsAcc) rs =
 -- | If the constraints cannot be satisfied with a valid state, then this
 -- | returns Nothing.
 solve :: Repository -> Constraints -> RepoState -> Maybe (Cost, RepoState, [Command])
-solve r cstrs rs = fmap (\(c, s, cs) -> (c, s, reverse cs)) $ solveRec r' cstrs' (allCommands, Set.singleton rs) (0, []) rs
-    where allCommands = Set.map mkInstall pids <> Set.map mkUninstall pids
-          pids = repoPackageIds r'
-          (r', cstrs') = compileProblem r cstrs rs
+solve r cstrs rs = fmap (\(c, s, cs) -> (c, s, reverse cs)) $ solveRec r' cstrs' (cmds, Set.singleton rs) (0, []) rs
+    where (r', cstrs', cmds) = compileProblem r cstrs rs
 
 
 -- | Attempt to minimise a problem, and reduce to a normal form.
-compileProblem :: Repository -> Constraints -> RepoState -> (CompiledRepository, CompiledConstraints)
+compileProblem :: Repository -> Constraints -> RepoState -> (CompiledRepository, CompiledConstraints, Set Command)
 compileProblem r c rs =
     let r' = compileRepository r
         (deps, conflicts) = compileConstraintsToPackageConstraints r c
-        mightBeInSolutionDirectly = depsToFlatPackageIds deps
+        mightHaveToInstallForConstraints = depsToFlatPackageIds deps
+        mightHaveToInstallAsDependencies =
+            concatSet . Set.map getFlatDeps . setCatMaybes
+                          $ (Set.map (`lookupPackage'`r')) mightHaveToInstallForConstraints
+        alreadyInstalled = repoStatePackageIds rs
+        theOnlyThingsThatWouldEverBeInstalled =
+            Set.union alreadyInstalled
+                   (Set.union mightHaveToInstallForConstraints
+                       mightHaveToInstallAsDependencies)
+        thingsThatCantBeInFinalState = conflicts
+        thingsThatWillDefinitelyNeedToBeUninstalled =
+            Set.intersection alreadyInstalled thingsThatCantBeInFinalState
+        commands = Set.union (Set.map mkUninstall thingsThatWillDefinitelyNeedToBeUninstalled)
+                   (Set.union (Set.map mkInstall mightHaveToInstallForConstraints)
+                    (Set.union (Set.map mkInstall mightHaveToInstallAsDependencies)
+                        (Set.map mkUninstall mightHaveToInstallAsDependencies)))
+        thingsThatMightBeTouchedBySolution =
+            Set.union theOnlyThingsThatWouldEverBeInstalled
+               thingsThatWillDefinitelyNeedToBeUninstalled
+        thingsThatWontBeTouchedBySolution =
+            Set.difference (repoPackageIds r') thingsThatMightBeTouchedBySolution
+        r'' = foldr deletePackage r' thingsThatWontBeTouchedBySolution
         getFlatDepsRec seen p =
             let pdeps = depsToFlatPackageIds $ packageDependencies' p
             in if Set.null pdeps then pdeps
                else let packs = Set.filter (not . (`Set.member`seen)) $ setCatMaybes (Set.map (`lookupPackage'`r') pdeps)
                     in Set.union pdeps (concatSet $ Set.map (getFlatDepsRec (Set.union seen packs)) packs)
         getFlatDeps = getFlatDepsRec Set.empty
-        mightBeInSolutionIndirectly =
-            let fromDeps = concatSet . Set.map getFlatDeps . setCatMaybes
-                                         $ (Set.map (`lookupPackage'`r')) mightBeInSolutionDirectly
-                fromConflicts = conflicts
-                fromRepoState = repoStatePackageIds rs
-            in Set.union (Set.union fromDeps fromConflicts) fromRepoState
-        wontBeInSolution =
-            Set.difference (repoPackageIds r')
-                   (Set.union mightBeInSolutionIndirectly mightBeInSolutionDirectly)
-        r'' = foldr deletePackage r' wontBeInSolution
-    in (r'', (deps, conflicts))
+    in (r'', (deps, conflicts), commands)
 
 
 satisfiesConstraints :: RepoState -> CompiledConstraints -> Bool
