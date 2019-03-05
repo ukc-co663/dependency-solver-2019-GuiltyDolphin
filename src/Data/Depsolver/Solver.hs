@@ -129,7 +129,7 @@ solveRec r cstrs (unconsumed, seenStates) (currCost, cmdsAcc) rs =
 -- |
 -- | If the constraints cannot be satisfied with a valid state, then this
 -- | returns Nothing.
-solve :: Repository -> Constraints -> RepoState -> Maybe (RepoState, [Command])
+solve :: Repository -> Constraints -> RepoState -> Maybe (Cost, RepoState, [Command])
 solve r cstrs rs = fmap (\(c, s, cs) -> (c, s, reverse cs)) $ solveRec r' cstrs' (allCommands, Set.singleton rs) (0, []) rs
     where allCommands = Set.map mkInstall pids <> Set.map mkUninstall pids
           pids = repoPackageIds r'

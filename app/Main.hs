@@ -24,7 +24,7 @@ main = do
         let solved = solve repo constraints repoState
         case solved of
           Nothing -> exitErr "couldn't solve constraints"
-          Just (_, cmds) -> putStrLn $ TJ.encodeStrict cmds
+          Just (_, _, cmds) -> putStrLn $ TJ.encodeStrict cmds
     _ -> exitErr "usage: ./solve REPO INITIAL-STATE CONSTRAINTS"
     where exitErr s = putStrLn s >> exitWith (ExitFailure 1)
           readAndParse f p e = readFile f >>= maybe (exitErr $ "could not parse " <> e) pure . p

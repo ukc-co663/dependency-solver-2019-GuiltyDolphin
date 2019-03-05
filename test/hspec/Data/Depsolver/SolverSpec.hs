@@ -68,10 +68,10 @@ spec = do
     context "with satisfiable constraints" $ do
       it "(_, S, []) ==> (S, [])" $
         property (\repo -> forAll (arbitrary `suchThat` validState (RI.compileRepository repo)) $
-                           \rstate -> solve repo emptyConstraints rstate === Just (rstate, []))
+                           \rstate -> fmap snd2 (solve repo emptyConstraints rstate) === Just (rstate, []))
       it "(_, S, C) when C already satisfied ==> (S, [])" $
         property (\(repo, rstate) -> forAll (arbitrary `suchThat` (satisfiesConstraints rstate . RI.compileConstraintsToPackageConstraints repo))
-                  $ \constrs -> solve repo constrs rstate === Just (rstate, []))
+                  $ \constrs -> fmap snd2 (solve repo constrs rstate) === Just (rstate, []))
       it "([A], [], [+A]) ==> ([A], [+A])" $
         checkSolver (do
           p1 <- genNewPackage
@@ -176,7 +176,9 @@ spec = do
             checkSolver rg = forAll (runRepoGen rg)
                              (\(repo, (initState, cstrs, (expectedState, expectedCmds))) ->
                               let res = solve repo cstrs initState
-                              in res === Just (expectedState, expectedCmds))
+                              in fmap snd2 res === Just (expectedState, expectedCmds))
+
+            snd2 (_, y, z) = (y, z)
 
             -- | Check that the solver determines the given inputs to be unsatisfiable.
             checkSolverInvalid :: RepoGen (RepoState, Constraints) -> Property
