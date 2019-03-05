@@ -164,7 +164,10 @@ compileProblem r c rs =
             Set.union alreadyInstalled
                    (Set.union mightHaveToInstallForConstraints
                        mightHaveToInstallAsDependencies)
-        thingsThatCantBeInFinalState = conflicts
+        packagesThatConflictWithPackagesThatMustBeInFinalState =
+            getAllConflictsOfSet packagesThatMustBeInFinalState
+        thingsThatCantBeInFinalState =
+          Set.union packagesThatConflictWithPackagesThatMustBeInFinalState conflicts
         allPossibleDependencyPackages =
           Set.union mightHaveToInstallAsDependencies
              (getAllDependenciesOfSet alreadyInstalled)
