@@ -28,6 +28,9 @@ type Set = Set.HashSet
 type CompiledConstraints = (CompiledDependencies, CompiledConflicts)
 
 
+type CompiledRepoState = RepoState
+
+
 -- | A command to manipulate the repository state.
 data Command =
     -- | Install the given package.
@@ -130,14 +133,14 @@ solveRec r cstrs (unconsumed, seenStates) (currCost, cmdsAcc) rs =
 -- | If the constraints cannot be satisfied with a valid state, then this
 -- | returns Nothing.
 solve :: Repository -> Constraints -> RepoState -> Maybe (Cost, RepoState, [Command])
-solve r cstrs rs = fmap (\(c, s, cs) -> (c, s, initialCommands <> reverse cs))
+solve r cstrs rs = fmap (\(c, s, cs) -> (c + initialCost, s, initialCommands <> reverse cs))
                    $ solveRec r' cstrs' (availableCommands, Set.singleton rs') (0, []) rs'
-    where (r', cstrs', availableCommands, initialCommands, rs') = compileProblem r cstrs rs
+    where (r', cstrs', availableCommands, initialCost, initialCommands, rs') = compileProblem r cstrs rs
 
 
 -- | Attempt to minimise a problem, and reduce to a normal form.
 compileProblem :: Repository -> Constraints -> RepoState ->
-                  (CompiledRepository, CompiledConstraints, Set Command, [Command], CompiledRepoState)
+                  (CompiledRepository, CompiledConstraints, Set Command, Cost, [Command], CompiledRepoState)
 compileProblem r c rs =
     let r' = compileRepository r
         (deps, conflicts) = compileConstraintsToPackageConstraints r c
@@ -145,6 +148,7 @@ compileProblem r c rs =
         getAllDependenciesOfSet packSet =
             concatSet . Set.map getFlatDeps . setCatMaybes
                           $ (Set.map (`lookupPackage'`r')) packSet
+        fst3 (x,_,_) = x
         mightHaveToInstallAsDependencies =
             getAllDependenciesOfSet mightHaveToInstallForConstraints
         alreadyInstalled = repoStatePackageIds rs
@@ -187,7 +191,11 @@ compileProblem r c rs =
         getFlatDeps = getFlatDepsRec Set.empty
         r''' = foldr deletePackage r'' thingsThatWontBeTouchedBySolution
         rs' = foldr uninstallPackage rs packagesUninstalledFromTheOutset
-    in (r''', (deps, conflicts), availableCommands, Set.toList initialCommands, rs')
+        initialCommands' = Set.toList initialCommands
+        initialCost = sum $ fmap commandCost initialCommands'
+        commandCost (Uninstall _) = uninstallCost
+        commandCost (Install p) = maybe maxBound fst3 (lookupPackage' p r')
+    in (r''', (deps, conflicts), availableCommands, initialCost, initialCommands', rs')
 
 
 satisfiesConstraints :: RepoState -> CompiledConstraints -> Bool
